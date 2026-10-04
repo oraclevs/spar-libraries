@@ -1,0 +1,101 @@
+import { parseQueryString, indexIn } from "../internal/utils.spar";
+import { WebError, badRequest, notImplemented } from "../error/web_error.spar";
+
+export enum HttpMethod {
+    Get,
+    Post,
+    Put,
+    Patch,
+    Delete,
+    Head,
+    Options
+};
+
+fn methodName(method: HttpMethod) -> str {
+    if method == HttpMethod::Get { return "GET"; }
+    if method == HttpMethod::Post { return "POST"; }
+    if method == HttpMethod::Put { return "PUT"; }
+    if method == HttpMethod::Patch { return "PATCH"; }
+    if method == HttpMethod::Delete { return "DELETE"; }
+    if method == HttpMethod::Head { return "HEAD"; }
+    return "OPTIONS";
+};
+
+// Method names are case-sensitive in HTTP; anything else is unknown.
+fn parseMethod(name: str) -> Option<HttpMethod> {
+    if name == "GET" { return some<HttpMethod>(value: HttpMethod::Get); }
+    if name == "POST" { return some<HttpMethod>(value: HttpMethod::Post); }
+    if name == "PUT" { return some<HttpMethod>(value: HttpMethod::Put); }
+    if name == "PATCH" { return some<HttpMethod>(value: HttpMethod::Patch); }
+    if name == "DELETE" { return some<HttpMethod>(value: HttpMethod::Delete); }
+    if name == "HEAD" { return some<HttpMethod>(value: HttpMethod::Head); }
+    if name == "OPTIONS" { return some<HttpMethod>(value: HttpMethod::Options); }
+    return none<HttpMethod>();
+};
+
+// Transport-independent request. Header names are lower-case.
+export struct Request {
+    method: HttpMethod = HttpMethod::Get;
+    path: str = "/";
+    rawQuery: str = "";
+    query: Map<str, List<str>> = {};
+    headers: Map<str, str> = {};
+    body: str = "";
+    remote: str = "";
+};
+
+fn lowerHeaders(headers: Map<str, str>) -> Map<str, str> {
+    var mut out: Map<str, str> = {};
+    for entry in headers.entries() {
+        out.insert(key: entry.key.toLowerCase().trim(), value: entry.value.trim());
+    }
+    return out;
+};
+
+// Builds a Request from a target such as "/users?id=3". The target must be
+// origin-form (start with "/"); a fragment, if any, is dropped.
+fn buildRequest(method: HttpMethod, target: str, headers: Map<str, str> = {}, body: str = "", remote: str = "") -> Result<Request, WebError> {
+    var mut t: str = target;
+    var hash: int = indexIn(table: t, needle: "#");
+    if hash >= 0 {
+        t = t.substring(start: 0, end: some<int>(value: hash));
+    }
+    if !t.startsWith(prefix: "/") {
+        return err<Request, WebError>(error: badRequest(message: "Invalid request target"));
+    }
+    var mut path: str = t;
+    var mut raw: str = "";
+    var cut: int = indexIn(table: t, needle: "?");
+    if cut >= 0 {
+        path = t.substring(start: 0, end: some<int>(value: cut));
+        raw = t.substring(start: cut + 1, end: none<int>());
+    }
+    return ok<Request, WebError>(value: Request(
+        method: method,
+        path: path,
+        rawQuery: raw,
+        query: parseQueryString(raw: raw, plusAsSpace: true),
+        headers: lowerHeaders(headers: headers),
+        body: body,
+        remote: remote,
+    ));
+};
+
+// Same as buildRequest but takes the method as text (501 for unknown methods).
+fn parseRequest(method: str, target: str, headers: Map<str, str> = {}, body: str = "", remote: str = "") -> Result<Request, WebError> {
+    var parsed: Option<HttpMethod> = parseMethod(name: method);
+    if parsed.isNone() {
+        return err<Request, WebError>(error: notImplemented(message: "Unsupported method"));
+    }
+    return buildRequest(method: parsed.unwrap(), target: target, headers: headers, body: body, remote: remote);
+};
+
+// Convenience for tests and examples: a GET/POST/... request that cannot fail.
+// A bad target becomes "/".
+fn makeRequest(method: HttpMethod, target: str, body: str = "", headers: Map<str, str> = {}) -> Request {
+    var built: Result<Request, WebError> = buildRequest(method: method, target: target, headers: headers, body: body);
+    if built.isErr() {
+        return Request(method: method);
+    }
+    return built.unwrap();
+};

@@ -1,0 +1,45 @@
+// Readable status codes. Plain ints, so they work anywhere a status is expected.
+export const statusOk: int = 200;
+export const statusCreated: int = 201;
+export const statusAccepted: int = 202;
+export const statusNoContent: int = 204;
+export const statusMovedPermanently: int = 301;
+export const statusFound: int = 302;
+export const statusSeeOther: int = 303;
+export const statusNotModified: int = 304;
+export const statusTemporaryRedirect: int = 307;
+export const statusPermanentRedirect: int = 308;
+export const statusBadRequest: int = 400;
+export const statusUnauthorized: int = 401;
+export const statusForbidden: int = 403;
+export const statusNotFound: int = 404;
+export const statusMethodNotAllowed: int = 405;
+export const statusConflict: int = 409;
+export const statusPayloadTooLarge: int = 413;
+export const statusUnprocessableEntity: int = 422;
+export const statusInternalServerError: int = 500;
+export const statusNotImplemented: int = 501;
+
+fn reasonPhrase(code: int) -> str {
+    if code == 200 { return "OK"; }
+    if code == 201 { return "Created"; }
+    if code == 202 { return "Accepted"; }
+    if code == 204 { return "No Content"; }
+    if code == 301 { return "Moved Permanently"; }
+    if code == 302 { return "Found"; }
+    if code == 303 { return "See Other"; }
+    if code == 304 { return "Not Modified"; }
+    if code == 307 { return "Temporary Redirect"; }
+    if code == 308 { return "Permanent Redirect"; }
+    if code == 400 { return "Bad Request"; }
+    if code == 401 { return "Unauthorized"; }
+    if code == 403 { return "Forbidden"; }
+    if code == 404 { return "Not Found"; }
+    if code == 405 { return "Method Not Allowed"; }
+    if code == 409 { return "Conflict"; }
+    if code == 413 { return "Payload Too Large"; }
+    if code == 422 { return "Unprocessable Entity"; }
+    if code == 500 { return "Internal Server Error"; }
+    if code == 501 { return "Not Implemented"; }
+    return "Status";
+};

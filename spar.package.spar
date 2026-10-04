@@ -1,0 +1,12 @@
+struct Package {
+    name: str = "spar-web";
+    version: str = "0.1.0";
+    kind: str = "library";
+    entry: str = "src/lib.spar";
+};
+
+struct Dependencies {
+    args: str = "github:oraclevs/spar-libraries#spar-args";
+    log: str = "github:oraclevs/spar-libraries#spar-log";
+    test: str = "github:oraclevs/spar-libraries#tester";
+};

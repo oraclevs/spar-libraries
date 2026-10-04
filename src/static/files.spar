@@ -1,0 +1,87 @@
+import pkg { readText, isFile } from "std/fs";
+import pkg { join as joinPath, normalize, absolute, extension } from "std/path";
+import { Context } from "../http/context.spar";
+import { Response } from "../http/response.spar";
+import { Route } from "../routing/route.spar";
+import { pathSegments, nul } from "../internal/utils.spar";
+
+// Small MIME table. Binary types are listed so the type is known, but the
+// response body is text (see staticFiles), so binary files are not served.
+fn mimeType(ext: str) -> str {
+    var e: str = ext.toLowerCase();
+    if e == "html" || e == "htm" { return "text/html; charset=utf-8"; }
+    if e == "css" { return "text/css; charset=utf-8"; }
+    if e == "js" || e == "mjs" { return "text/javascript; charset=utf-8"; }
+    if e == "json" { return "application/json; charset=utf-8"; }
+    if e == "txt" || e == "md" { return "text/plain; charset=utf-8"; }
+    if e == "csv" { return "text/csv; charset=utf-8"; }
+    if e == "xml" { return "application/xml; charset=utf-8"; }
+    if e == "svg" { return "image/svg+xml"; }
+    if e == "png" { return "image/png"; }
+    if e == "jpg" || e == "jpeg" { return "image/jpeg"; }
+    if e == "webp" { return "image/webp"; }
+    if e == "ico" { return "image/x-icon"; }
+    if e == "woff" { return "font/woff"; }
+    if e == "woff2" { return "font/woff2"; }
+    return "application/octet-stream";
+};
+
+fn isTextMime(mime: str) -> bool {
+    return mime.startsWith(prefix: "text/") || mime.startsWith(prefix: "application/json") || mime.startsWith(prefix: "application/xml") || mime == "image/svg+xml";
+};
+
+// True when `relative` (already percent-decoded) stays inside a directory:
+// no "..", no hidden (dot) segments, no backslashes, no NUL, not absolute.
+fn isSafeRelative(relative: str) -> bool {
+    if relative.isEmpty() || relative.startsWith(prefix: "/") || relative.contains(needle: "\\") || relative.contains(needle: nul()) {
+        return false;
+    }
+    for segment in pathSegments(path: relative) {
+        if segment.startsWith(prefix: ".") {
+            return false;
+        }
+    }
+    return true;
+};
+
+// Maps a URL tail to a file under `dir`, or "" when it would escape `dir`.
+// Defence in depth: segment check, then normalise and require the result to
+// sit under the absolute root. Symlinks are not resolved (no realpath in SPAR).
+fn resolveStatic(dir: str, relative: str) -> str {
+    if !isSafeRelative(relative: relative) {
+        return "";
+    }
+    var root: str = normalize(path: absolute(path: dir));
+    var full: str = normalize(path: joinPath(left: root, right: relative));
+    if !full.startsWith(prefix: root + "/") {
+        return "";
+    }
+    return full;
+};
+
+fn serveFile(dir: str, relative: str) -> Response {
+    var full: str = resolveStatic(dir: dir, relative: relative);
+    if full.isEmpty() || !isFile(path: full) {
+        return Response.text(value: "Not Found", status: 404);
+    }
+    var mime: str = mimeType(ext: extension(path: full));
+    if !isTextMime(mime: mime) {
+        return Response.text(value: "Binary static files are not supported yet", status: 501);
+    }
+    try {
+        return Response.text(value: readText(path: full)).withHeader(name: "content-type", value: mime).withHeader(name: "x-content-type-options", value: "nosniff");
+    } catch problem {
+        return Response.text(value: "Not Found", status: 404);
+    }
+};
+
+// GET <prefix>/* served from `dir`:  staticFiles(prefix: "/public", dir: "./public")
+// Text files only (html, css, js, json, txt, svg, ...). Path traversal,
+// hidden files and absolute paths are refused with 404. Add the returned Route
+// to App.routes or a group; mount order does not matter.
+fn staticFiles(prefix: str, dir: str) -> Route {
+    var handler = fn(ctx: Context) -> Response {
+        return serveFile(dir: dir, relative: ctx.param(name: "file"));
+    };
+    return Route.get(path: prefix + "/*file", handler: handler);
+};

@@ -1,0 +1,25 @@
+// Serves examples/public under /public (text files only). Relative paths resolve
+// against the directory of the entry script, not the shell cwd.
+//   printf 'GET /public/index.html HTTP/1.1\r\n\r\n' | spar exec examples/static_files.spar
+import pkg { println } from "std/io";
+import { Context } from "../src/http/context.spar";
+import { Response } from "../src/http/response.spar";
+import { WebError } from "../src/error/web_error.spar";
+import { Route } from "../src/routing/route.spar";
+import { App, Server } from "../src/app/app.spar";
+import { staticFiles } from "../src/static/files.spar";
+import { serveStdio } from "../src/transport/stdio.spar";
+
+fn home(ctx: Context) -> Response {
+    return Response.redirect(location: "/public/index.html");
+};
+
+fn main() -> int {
+    var app: App = App(routes: [Route.get(path: "/", handler: home), staticFiles(prefix: "/public", dir: "public")]);
+    var compiled: Result<Server, WebError> = app.compile();
+    if compiled.isErr() {
+        println(value: compiled.unwrapErr().message);
+        return 1;
+    }
+    return serveStdio(server: compiled.unwrap());
+};

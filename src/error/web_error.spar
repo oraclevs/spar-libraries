@@ -1,0 +1,153 @@
+import { statusBadRequest, statusNotFound, statusMethodNotAllowed, statusUnauthorized, statusForbidden, statusConflict, statusPayloadTooLarge, statusUnprocessableEntity, statusInternalServerError, statusNotImplemented } from "../http/status.spar";
+
+// What went wrong, independent of the status code that reports it.
+export enum WebErrorKind {
+    NotFound,
+    MethodNotAllowed,
+    BadRequest,
+    PayloadTooLarge,
+    Validation,
+    Unauthorized,
+    Forbidden,
+    Conflict,
+    Application,
+    Internal,
+    Config
+};
+
+// An intentional HTTP failure (404, 422, ...) or a framework fault (Internal,
+// Config). `cause` holds the lower-level message, `metadata` free-form detail
+// such as the offending field.
+export struct WebError {
+    kind: WebErrorKind = WebErrorKind::Internal;
+    status: int = 500;
+    message: str = "";
+    cause: str = "";
+    metadata: Map<str, str> = {};
+};
+
+fn kindName(kind: WebErrorKind) -> str {
+    if kind == WebErrorKind::NotFound { return "not_found"; }
+    if kind == WebErrorKind::MethodNotAllowed { return "method_not_allowed"; }
+    if kind == WebErrorKind::BadRequest { return "bad_request"; }
+    if kind == WebErrorKind::PayloadTooLarge { return "payload_too_large"; }
+    if kind == WebErrorKind::Validation { return "validation"; }
+    if kind == WebErrorKind::Unauthorized { return "unauthorized"; }
+    if kind == WebErrorKind::Forbidden { return "forbidden"; }
+    if kind == WebErrorKind::Conflict { return "conflict"; }
+    if kind == WebErrorKind::Application { return "application"; }
+    if kind == WebErrorKind::Config { return "config"; }
+    return "internal";
+};
+
+fn notFound(message: str = "Not Found") -> WebError {
+    return WebError(kind: WebErrorKind::NotFound, status: statusNotFound, message: message);
+};
+
+fn methodNotAllowed(allow: str) -> WebError {
+    return WebError(kind: WebErrorKind::MethodNotAllowed, status: statusMethodNotAllowed, message: "Method Not Allowed", metadata: { allow: allow; });
+};
+
+fn badRequest(message: str, cause: str = "") -> WebError {
+    return WebError(kind: WebErrorKind::BadRequest, status: statusBadRequest, message: message, cause: cause);
+};
+
+fn payloadTooLarge(limit: int) -> WebError {
+    return WebError(kind: WebErrorKind::PayloadTooLarge, status: statusPayloadTooLarge, message: "Request body too large", metadata: { limit: limit.toString(); });
+};
+
+fn validationError(message: str, field: str = "") -> WebError {
+    return WebError(kind: WebErrorKind::Validation, status: statusUnprocessableEntity, message: message, metadata: { field: field; });
+};
+
+fn unauthorized(message: str = "Unauthorized") -> WebError {
+    return WebError(kind: WebErrorKind::Unauthorized, status: statusUnauthorized, message: message);
+};
+
+fn forbidden(message: str = "Forbidden") -> WebError {
+    return WebError(kind: WebErrorKind::Forbidden, status: statusForbidden, message: message);
+};
+
+fn conflict(message: str) -> WebError {
+    return WebError(kind: WebErrorKind::Conflict, status: statusConflict, message: message);
+};
+
+// An application-defined failure with any status.
+fn appError(status: int, message: str) -> WebError {
+    return WebError(kind: WebErrorKind::Application, status: status, message: message);
+};
+
+fn internalError(message: str, cause: str = "") -> WebError {
+    return WebError(kind: WebErrorKind::Internal, status: statusInternalServerError, message: message, cause: cause);
+};
+
+fn notImplemented(message: str) -> WebError {
+    return WebError(kind: WebErrorKind::Internal, status: statusNotImplemented, message: message);
+};
+
+fn configError(message: str) -> WebError {
+    return WebError(kind: WebErrorKind::Config, status: statusInternalServerError, message: message);
+};
+
+// --- raising -------------------------------------------------------------
+// SPAR cannot throw user errors and `panic` cannot be caught. A caught runtime
+// error's message is readable, so a WebError is smuggled through Result.expect
+// and decoded again by the app's error boundary. Only this section knows that.
+fn marker() -> str {
+    return "@@sparweb@@";
+};
+
+fn kindFromName(name: str) -> WebErrorKind {
+    if name == "not_found" { return WebErrorKind::NotFound; }
+    if name == "method_not_allowed" { return WebErrorKind::MethodNotAllowed; }
+    if name == "bad_request" { return WebErrorKind::BadRequest; }
+    if name == "payload_too_large" { return WebErrorKind::PayloadTooLarge; }
+    if name == "validation" { return WebErrorKind::Validation; }
+    if name == "unauthorized" { return WebErrorKind::Unauthorized; }
+    if name == "forbidden" { return WebErrorKind::Forbidden; }
+    if name == "conflict" { return WebErrorKind::Conflict; }
+    if name == "application" { return WebErrorKind::Application; }
+    if name == "config" { return WebErrorKind::Config; }
+    return WebErrorKind::Internal;
+};
+
+// Stops the current handler. Must run under the app's error boundary.
+fn raise(error: WebError) -> void {
+    var carrier: Result<int, str> = err<int, str>(error: "web error");
+    var unused: int = carrier.expect(message: marker() + kindName(kind: error.kind) + "|" + error.status.toString() + "|" + error.message.replace(from: "|", to: "/"));
+    return;
+};
+
+// Rebuilds a WebError from a caught runtime error message. Runtime errors that
+// were not raised through `raise` become Internal.
+fn errorFromCaught(caught: str) -> WebError {
+    var parts: List<str> = caught.split(separator: marker());
+    if parts.length() < 2 {
+        return internalError(message: "Internal Server Error", cause: caught);
+    }
+    var fields: List<str> = parts.get(index: 1).unwrap().split(separator: "|");
+    if fields.length() < 3 {
+        return internalError(message: "Internal Server Error", cause: caught);
+    }
+    var mut status: int = 500;
+    var raw: str = fields[1];
+    if raw.length() == 3 {
+        status = parseStatus(text: raw);
+    }
+    return WebError(kind: kindFromName(name: fields[0]), status: status, message: fields[2]);
+};
+
+fn parseStatus(text: str) -> int {
+    var digits: str = "0123456789";
+    var mut value: int = 0;
+    var mut i: int = 0;
+    while i < text.length() {
+        var d: int = digits.indexOf(needle: text.substring(start: i, end: some<int>(value: i + 1))).unwrapOr(fallback: -1);
+        if d < 0 {
+            return 500;
+        }
+        value = value * 10 + d;
+        i = i + 1;
+    }
+    return value;
+};

@@ -1,0 +1,43 @@
+import { Context } from "../http/context.spar";
+import { Response } from "../http/response.spar";
+
+fn passThrough(ctx: Context, next: fn(Context) -> Response) -> Response {
+    return next(arg0: ctx);
+};
+
+// Wraps the rest of the pipeline. `run` receives the context and `next`:
+//   - call next(arg0: ctx) to continue, and change the Response it returns;
+//   - return a Response without calling next to short-circuit;
+//   - pass a changed copy of ctx (ctx.withLocal) to next to hand data down.
+// A Middleware is a plain function value, so it can capture configuration:
+//   middleware(name: "auth", run: fn(ctx: Context, next: fn(Context) -> Response) -> Response { ... })
+export struct Middleware {
+    name: str = "";
+    run: fn(Context, fn(Context) -> Response) -> Response = passThrough;
+    // Non-empty when the middleware was configured wrongly; App.compile
+    // reports it instead of failing on a request.
+    error: str = "";
+};
+
+fn middleware(name: str, run: fn(Context, fn(Context) -> Response) -> Response) -> Middleware {
+    return Middleware(name: name, run: run);
+};
+
+fn wrapWith(layer: Middleware, next: fn(Context) -> Response) -> fn(Context) -> Response {
+    var run: fn(Context, fn(Context) -> Response) -> Response = layer.run;
+    return fn(ctx: Context) -> Response {
+        return run(arg0: ctx, arg1: next);
+    };
+};
+
+// Folds [A, B, C] around `inner` once, so a request pays only function calls:
+//   A before -> B before -> C before -> inner -> C after -> B after -> A after
+fn composeChain(layers: List<Middleware>, inner: fn(Context) -> Response) -> fn(Context) -> Response {
+    var mut chain: fn(Context) -> Response = inner;
+    var mut i: int = layers.length() - 1;
+    while i >= 0 {
+        chain = wrapWith(layer: layers[i], next: chain);
+        i = i - 1;
+    }
+    return chain;
+};

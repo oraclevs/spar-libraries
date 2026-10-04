@@ -1,0 +1,158 @@
+import pkg { parse } from "std/json";
+import { parseInt, percentDecode, parseQueryString, indexIn } from "../internal/utils.spar";
+import { Request, HttpMethod, methodName } from "./request.spar";
+import { WebError, badRequest, validationError, raise } from "../error/web_error.spar";
+
+// What a handler receives: the request, the matched route's parameters, and
+// per-request locals that middleware can set for the handler.
+// Context is a value. Middleware that changes it passes the changed copy
+// (withLocal) to `next`.
+export struct Context {
+    request: Request = Request();
+    params: Map<str, str> = {};
+    locals: Map<str, str> = {};
+    pattern: str = "";
+};
+
+impl Context {
+    fn method(self) -> HttpMethod {
+        return self.request.method;
+    };
+
+    fn path(self) -> str {
+        return self.request.path;
+    };
+
+    // Route parameter, percent-decoded. "" when the route has no such parameter.
+    fn param(self, name: str) -> str {
+        return self.params.getOr(key: name, fallback: "");
+    };
+
+    fn paramInt(self, name: str, default: int = 0) -> int {
+        return parseInt(value: self.param(name: name)).unwrapOr(fallback: default);
+    };
+
+    fn hasQuery(self, name: str) -> bool {
+        return self.request.query.containsKey(key: name);
+    };
+
+    // First value of ?name=..., or `default`.
+    fn query(self, name: str, default: str = "") -> str {
+        var values: List<str> = self.request.query.getOr(key: name, fallback: []);
+        if values.length() == 0 {
+            return default;
+        }
+        return values[0];
+    };
+
+    // Every value of a repeated parameter: ?tag=a&tag=b -> ["a", "b"].
+    fn queryAll(self, name: str) -> List<str> {
+        return self.request.query.getOr(key: name, fallback: []);
+    };
+
+    // Integer query value; `default` when absent or not a plain integer.
+    fn queryInt(self, name: str, default: int = 0) -> int {
+        return parseInt(value: self.query(name: name)).unwrapOr(fallback: default);
+    };
+
+    // Case-insensitive; "" when absent.
+    fn header(self, name: str, default: str = "") -> str {
+        return self.request.headers.getOr(key: name.toLowerCase(), fallback: default);
+    };
+
+    fn hasHeader(self, name: str) -> bool {
+        return self.request.headers.containsKey(key: name.toLowerCase());
+    };
+
+    fn body(self) -> str {
+        return self.request.body;
+    };
+
+    // Cookie from the Cookie header; "" when absent.
+    fn cookie(self, name: str, default: str = "") -> str {
+        for pair in self.header(name: "cookie").split(separator: ";") {
+            var part: str = pair.trim();
+            var cut: int = indexIn(table: part, needle: "=");
+            if cut > 0 && part.substring(start: 0, end: some<int>(value: cut)) == name {
+                return part.substring(start: cut + 1, end: none<int>());
+            }
+        }
+        return default;
+    };
+
+    // Fields of an application/x-www-form-urlencoded body (first value wins).
+    fn form(self) -> Map<str, str> {
+        var mut out: Map<str, str> = {};
+        var all: Map<str, List<str>> = parseQueryString(raw: self.request.body, plusAsSpace: true);
+        for entry in all.entries() {
+            out.insert(key: entry.key, value: entry.value[0]);
+        }
+        return out;
+    };
+
+    fn local(self, name: str, default: str = "") -> str {
+        return self.locals.getOr(key: name, fallback: default);
+    };
+
+    // A copy with one more local. Pass the copy to `next`.
+    fn withLocal(self, name: str, value: str) -> Context {
+        var mut l: Map<str, str> = self.locals;
+        l.insert(key: name, value: value);
+        return Context(request: self.request, params: self.params, locals: l, pattern: self.pattern);
+    };
+
+    fn withParams(self, params: Map<str, str>, pattern: str) -> Context {
+        return Context(request: self.request, params: params, locals: self.locals, pattern: pattern);
+    };
+};
+
+// After "— " in a runtime error, which is where the useful part starts.
+fn errorDetail(caught: str) -> str {
+    var parts: List<str> = caught.split(separator: " — ");
+    return parts[parts.length() - 1].replace(from: "internal runtime error: ", to: "");
+};
+
+// Maps a native JSON failure to a WebError: malformed text is 400, a value of
+// the wrong shape/type (typed decode) is 422 with the field path.
+fn jsonFailure(caught: str) -> WebError {
+    var detail: str = errorDetail(caught: caught);
+    if detail.contains(needle: "invalid JSON") {
+        return badRequest(message: "Invalid JSON body", cause: detail);
+    }
+    var mut field: str = "";
+    if detail.startsWith(prefix: "$.") {
+        var cut: int = indexIn(table: detail, needle: ":");
+        if cut > 0 {
+            field = detail.substring(start: 2, end: some<int>(value: cut));
+        }
+    }
+    return validationError(message: "Invalid request body: " + detail, field: field);
+};
+
+// Decodes the request body into T (struct, list, Record, ...). Failures are
+// returned, never thrown:
+//   malformed JSON            -> 400 "Invalid JSON body"
+//   wrong type / missing field -> 422 "Invalid request body: $.age: expected int, ..."
+// SPAR cannot call a user method with explicit type arguments, so this is a
+// function rather than ctx.json<T>().
+fn jsonBody<T>(ctx: Context) -> Result<T, WebError> {
+    if ctx.request.body.trim().isEmpty() {
+        return err<T, WebError>(error: badRequest(message: "Invalid JSON body", cause: "empty body"));
+    }
+    try {
+        return ok<T, WebError>(value: parse<T>(text: ctx.request.body));
+    } catch problem {
+        return err<T, WebError>(error: jsonFailure(caught: problem.message));
+    }
+};
+
+// Like jsonBody but stops the handler on failure; the app's error boundary
+// turns it into the 400/422 response. Use when a handler has nothing to do on
+// bad input.
+fn requireJson<T>(ctx: Context) -> T {
+    var result = jsonBody<T>(ctx: ctx);
+    if result.isErr() {
+        raise(error: result.unwrapErr());
+    }
+    return result.unwrap();
+};
