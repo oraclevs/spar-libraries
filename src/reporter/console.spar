@@ -1,0 +1,133 @@
+import pkg { green, red, yellow, bold } from "std/terminal";
+import { TestSuite } from "../core/suite.spar";
+import { RunOptions } from "../core/options.spar";
+import { Failure } from "../result/failure.spar";
+import { TestResult, TestStatus } from "../result/test_result.spar";
+import { SuiteResult } from "../result/suite_result.spar";
+import { RunResult } from "../result/run_result.spar";
+import { Reporter } from "./reporter.spar";
+import { renderFailure, repeatText } from "./format.spar";
+
+fn paint(text: str, kind: str, options: RunOptions) -> str {
+    if !options.color {
+        return text;
+    }
+    if kind == "green" {
+        return green(text: text);
+    } else if kind == "red" {
+        return red(text: text);
+    } else if kind == "yellow" {
+        return yellow(text: text);
+    }
+    return bold(text: text);
+};
+
+fn renderTestLine(result: TestResult, options: RunOptions) -> str {
+    var mut line: str = "";
+    if result.status == TestStatus::Passed {
+        line = paint(text: "  ✓", kind: "green", options: options) + " " + result.name;
+    } else if result.status == TestStatus::Failed {
+        line = paint(text: "  ✗", kind: "red", options: options) + " " + result.name;
+    } else {
+        line = paint(text: "  -", kind: "yellow", options: options) + " " + result.name + " (skipped)";
+    }
+    if options.verbose && result.status != TestStatus::Skipped {
+        line = line + " (${result.duration}ms)";
+    }
+    return line;
+};
+
+// Text printed after a suite finishes. Quiet mode prints nothing here.
+fn renderSuite(result: SuiteResult, options: RunOptions) -> str {
+    if options.quiet {
+        return "";
+    }
+    var mut out: str = "\n" + paint(text: result.name, kind: "bold", options: options) + "\n";
+    if options.verbose {
+        out = out + "  (${result.passed} passed, ${result.failed} failed, ${result.skipped} skipped, ${result.duration}ms)\n";
+    }
+    out = out + "\n";
+    for test in result.testResults {
+        out = out + renderTestLine(result: test, options: options) + "\n";
+    }
+    return out;
+};
+
+// Every failure in the run, in order, followed by hook failures.
+fn renderFailures(run: RunResult, options: RunOptions) -> str {
+    var mut out: str = "";
+    for suite in run.suites {
+        for test in suite.testResults {
+            for failure in test.failures {
+                out = out + "\n" + paint(text: renderFailure(failure: failure), kind: "red", options: options) + "\n";
+            }
+        }
+        for failure in suite.hookFailures {
+            out = out + "\n" + paint(text: renderFailure(failure: failure), kind: "red", options: options) + "\n";
+        }
+    }
+    return out;
+};
+
+fn renderSummary(run: RunResult, options: RunOptions) -> str {
+    var mut out: str = "\n" + repeatText(text: "─", count: 28) + "\n\n";
+    out = out + paint(text: "${run.passed} passed", kind: "green", options: options) + "\n";
+    if run.failed > 0 {
+        out = out + paint(text: "${run.failed} failed", kind: "red", options: options) + "\n";
+    }
+    if run.skipped > 0 {
+        out = out + paint(text: "${run.skipped} skipped", kind: "yellow", options: options) + "\n";
+    }
+    if run.hookFailures > 0 {
+        out = out + paint(text: "${run.hookFailures} hook failure(s)", kind: "red", options: options) + "\n";
+    }
+    out = out + "${run.total} total\n\nFinished in ${run.duration}ms";
+    return out;
+};
+
+fn renderRun(run: RunResult, options: RunOptions) -> str {
+    return renderFailures(run: run, options: options) + renderSummary(run: run, options: options);
+};
+
+fn renderListing(suites: List<TestSuite>) -> str {
+    var mut out: str = "";
+    var mut first: bool = true;
+    for suite in suites {
+        if !first {
+            out = out + "\n";
+        }
+        first = false;
+        out = out + suite.name + "\n";
+        for test in suite.tests {
+            out = out + "  " + test.name + "\n";
+        }
+    }
+    return out;
+};
+
+fn printSuite(result: SuiteResult, options: RunOptions) -> void {
+    var text: str = renderSuite(result: result, options: options);
+    if text.length() > 0 {
+        print(value: text);
+    }
+    return;
+};
+
+fn printRun(result: RunResult, options: RunOptions) -> void {
+    println(value: renderRun(run: result, options: options));
+    return;
+};
+
+fn printListing(suites: List<TestSuite>, options: RunOptions) -> void {
+    print(value: renderListing(suites: suites));
+    return;
+};
+
+fn consoleReporter() -> Reporter {
+    return Reporter(
+        name: "console",
+        onSuite: printSuite,
+        onRun: printRun,
+        onList: printListing,
+    );
+};

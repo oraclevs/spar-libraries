@@ -1,0 +1,179 @@
+import pkg { toInt, toFloat } from "args/internal/value";
+import { Failure } from "../result/failure.spar";
+import { Value, AssertedKind, unsetValue } from "../result/value.spar";
+
+// Spar module-level state is per importing module, so an assertion cannot hand
+// a Failure to the runner through a shared variable. What does cross a
+// try/catch boundary is the error message, so a Failure is encoded into text
+// there and decoded by the runner. Fields are length-prefixed ("3:abc"), so
+// any content round-trips.
+
+fn field(text: str) -> str {
+    return "${text.length()}:" + text;
+};
+
+// One decoded field and the position just after it.
+struct FieldRead {
+    text: str = "";
+    next: int = 0;
+};
+
+fn readField(source: str, start: int) -> FieldRead {
+    var mut pos: int = start;
+    var mut digits: str = "";
+    while pos < source.length() {
+        var ch: str = source.substring(start: pos, end: some(value: pos + 1));
+        pos = pos + 1;
+        if ch == ":" {
+            break;
+        }
+        digits = digits + ch;
+    }
+    var size: int = toInt(text: digits).unwrap();
+    return FieldRead(
+        text: source.substring(start: pos, end: some(value: pos + size)),
+        next: pos + size,
+    );
+};
+
+fn kindCode(kind: AssertedKind) -> str {
+    if kind == AssertedKind::Int {
+        return "int";
+    } else if kind == AssertedKind::Float {
+        return "float";
+    } else if kind == AssertedKind::Bool {
+        return "bool";
+    } else if kind == AssertedKind::Str {
+        return "str";
+    } else if kind == AssertedKind::IntList {
+        return "ints";
+    } else if kind == AssertedKind::FloatList {
+        return "floats";
+    } else if kind == AssertedKind::BoolList {
+        return "bools";
+    } else if kind == AssertedKind::StrList {
+        return "strs";
+    }
+    return "unset";
+};
+
+fn kindFrom(code: str) -> AssertedKind {
+    if code == "int" {
+        return AssertedKind::Int;
+    } else if code == "float" {
+        return AssertedKind::Float;
+    } else if code == "bool" {
+        return AssertedKind::Bool;
+    } else if code == "str" {
+        return AssertedKind::Str;
+    } else if code == "ints" {
+        return AssertedKind::IntList;
+    } else if code == "floats" {
+        return AssertedKind::FloatList;
+    } else if code == "bools" {
+        return AssertedKind::BoolList;
+    } else if code == "strs" {
+        return AssertedKind::StrList;
+    }
+    return AssertedKind::Unset;
+};
+
+// A list is its elements, each as a field.
+fn encodeValue(value: Value) -> str {
+    var mut body: str = "";
+    if value.kind == AssertedKind::Int {
+        body = "${value.intVal}";
+    } else if value.kind == AssertedKind::Float {
+        body = "${value.floatVal}";
+    } else if value.kind == AssertedKind::Bool {
+        body = "${value.boolVal}";
+    } else if value.kind == AssertedKind::Str {
+        body = value.strVal;
+    } else if value.kind == AssertedKind::IntList {
+        for item in value.ints {
+            body = body + field(text: "${item}");
+        }
+    } else if value.kind == AssertedKind::FloatList {
+        for item in value.floats {
+            body = body + field(text: "${item}");
+        }
+    } else if value.kind == AssertedKind::BoolList {
+        for item in value.bools {
+            body = body + field(text: "${item}");
+        }
+    } else if value.kind == AssertedKind::StrList {
+        for item in value.strs {
+            body = body + field(text: item);
+        }
+    }
+    return field(text: kindCode(kind: value.kind)) + field(text: body);
+};
+
+fn readItems(body: str) -> List<str> {
+    var mut items: List<str> = [];
+    var mut pos: int = 0;
+    while pos < body.length() {
+        var taken: FieldRead = readField(source: body, start: pos);
+        items.append(value: taken.text);
+        pos = taken.next;
+    }
+    return items;
+};
+
+fn decodeValue(source: str) -> Value {
+    var kindField: FieldRead = readField(source: source, start: 0);
+    var bodyField: FieldRead = readField(source: source, start: kindField.next);
+    var kind: AssertedKind = kindFrom(code: kindField.text);
+    var body: str = bodyField.text;
+    var mut value: Value = Value(kind: kind);
+    if kind == AssertedKind::Int {
+        value.intVal = toInt(text: body).unwrap();
+    } else if kind == AssertedKind::Float {
+        value.floatVal = toFloat(text: body).unwrap();
+    } else if kind == AssertedKind::Bool {
+        value.boolVal = body == "true";
+    } else if kind == AssertedKind::Str {
+        value.strVal = body;
+    } else if kind == AssertedKind::IntList {
+        var mut ints: List<int> = [];
+        for item in readItems(body: body) {
+            ints.append(value: toInt(text: item).unwrap());
+        }
+        value.ints = ints;
+    } else if kind == AssertedKind::FloatList {
+        var mut floats: List<float> = [];
+        for item in readItems(body: body) {
+            floats.append(value: toFloat(text: item).unwrap());
+        }
+        value.floats = floats;
+    } else if kind == AssertedKind::BoolList {
+        var mut bools: List<bool> = [];
+        for item in readItems(body: body) {
+            bools.append(value: item == "true");
+        }
+        value.bools = bools;
+    } else if kind == AssertedKind::StrList {
+        value.strs = readItems(body: body);
+    }
+    return value;
+};
+
+fn encodeFailure(failure: Failure) -> str {
+    return field(text: failure.assertion)
+        + field(text: failure.message)
+        + field(text: encodeValue(value: failure.expected))
+        + field(text: encodeValue(value: failure.actual));
+};
+
+fn decodeFailure(source: str) -> Failure {
+    var assertion: FieldRead = readField(source: source, start: 0);
+    var message: FieldRead = readField(source: source, start: assertion.next);
+    var expected: FieldRead = readField(source: source, start: message.next);
+    var actual: FieldRead = readField(source: source, start: expected.next);
+    return Failure(
+        assertion: assertion.text,
+        message: message.text,
+        expected: decodeValue(source: expected.text),
+        actual: decodeValue(source: actual.text),
+    );
+};

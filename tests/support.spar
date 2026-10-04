@@ -1,0 +1,36 @@
+import { Test } from "../src/core/test.spar";
+import { TestSuite } from "../src/core/suite.spar";
+import { RunOptions } from "../src/core/options.spar";
+import { runSuites } from "../src/core/runner.spar";
+import { Reporter } from "../src/reporter/reporter.spar";
+import { RunResult } from "../src/result/run_result.spar";
+import { TestResult, TestStatus } from "../src/result/test_result.spar";
+import { Failure } from "../src/result/failure.spar";
+
+// Runs one function as a test under the real runner and returns its result.
+fn runOne(body: fn() -> void) -> TestResult {
+    var suite: TestSuite = TestSuite(name: "fixture", tests: [Test(name: "fixture test", run: body)]);
+    var run: RunResult = runSuites(suites: [suite], options: RunOptions(), reporter: Reporter());
+    return run.suites.get(index: 0).unwrap().testResults.get(index: 0).unwrap();
+};
+
+fn passes(body: fn() -> void) -> bool {
+    return runOne(body: body).status == TestStatus::Passed;
+};
+
+fn fails(body: fn() -> void) -> bool {
+    return runOne(body: body).status == TestStatus::Failed;
+};
+
+// The first failure of a test that must fail.
+fn failureOf(body: fn() -> void) -> Failure {
+    var result: TestResult = runOne(body: body);
+    if result.failures.length() == 0 {
+        return Failure(assertion: "none");
+    }
+    return result.failures.get(index: 0).unwrap();
+};
+
+fn run(suites: List<TestSuite>, options: RunOptions) -> RunResult {
+    return runSuites(suites: suites, options: options, reporter: Reporter());
+};

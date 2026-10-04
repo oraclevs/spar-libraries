@@ -1,0 +1,169 @@
+import { Test } from "../src/core/test.spar";
+import { TestSuite } from "../src/core/suite.spar";
+import { RunOptions } from "../src/core/options.spar";
+import { RunResult } from "../src/result/run_result.spar";
+import { SuiteResult } from "../src/result/suite_result.spar";
+import { Failure } from "../src/result/failure.spar";
+import { strValue, intValue, intListValue, strListValue } from "../src/result/value.spar";
+import { assertTrue, assertFalse } from "../src/assertions/basic.spar";
+import { assertEqual, assertEqualStr } from "../src/assertions/equality.spar";
+import { assertStringContains, assertStartsWith, assertEndsWith } from "../src/assertions/strings.spar";
+import { renderValue, renderFailure } from "../src/reporter/format.spar";
+import { renderSuite, renderRun, renderListing, consoleReporter } from "../src/reporter/console.spar";
+import { Reporter } from "../src/reporter/reporter.spar";
+import { runSuites } from "../src/core/runner.spar";
+import { parseOptions, runMain } from "../src/cli/runner.spar";
+
+fn good() -> void { assertEqual(actual: 1, expected: 1); };
+fn bad() -> void { assertEqual(actual: 1, expected: 2); };
+
+fn sample() -> RunResult {
+    var suite: TestSuite = TestSuite(name: "Sample", tests: [
+        Test(name: "works", run: good),
+        Test(name: "breaks", run: bad),
+        Test(name: "later", run: good, enabled: false)
+    ]);
+    return runSuites(suites: [suite], options: RunOptions(), reporter: Reporter());
+};
+
+fn valuesRender() -> void {
+    assertEqualStr(actual: renderValue(value: intValue(value: 42)), expected: "42");
+    assertEqualStr(actual: renderValue(value: strValue(value: "hello")), expected: "\"hello\"");
+    assertEqualStr(actual: renderValue(value: intListValue(value: [1, 2])), expected: "[1, 2]");
+    assertEqualStr(actual: renderValue(value: strListValue(value: ["a", "b"])), expected: "[\"a\", \"b\"]");
+};
+
+fn failureRendersExpectedAndReceived() -> void {
+    var text: str = renderFailure(failure: Failure(
+        assertion: "assertEqual",
+        testName: "rejects malformed integer",
+        expected: intValue(value: 42),
+        actual: strValue(value: "hello"),
+    ));
+    assertStartsWith(actual: text, prefix: "FAIL: rejects malformed integer");
+    assertStringContains(actual: text, needle: "Expected:\n  42");
+    assertStringContains(actual: text, needle: "Received:\n  \"hello\"");
+};
+
+fn suiteLinesShowMarks() -> void {
+    var suite: SuiteResult = sample().suites.get(index: 0).unwrap();
+    var text: str = renderSuite(result: suite, options: RunOptions());
+    assertStringContains(actual: text, needle: "Sample");
+    assertStringContains(actual: text, needle: "✓ works");
+    assertStringContains(actual: text, needle: "✗ breaks");
+    assertStringContains(actual: text, needle: "later (skipped)");
+    assertFalse(actual: text.contains(needle: "ms)"));
+};
+
+fn verboseShowsDurations() -> void {
+    var suite: SuiteResult = sample().suites.get(index: 0).unwrap();
+    var text: str = renderSuite(result: suite, options: RunOptions(verbose: true));
+    assertStringContains(actual: text, needle: "ms)");
+};
+
+fn quietHidesSuiteLines() -> void {
+    var suite: SuiteResult = sample().suites.get(index: 0).unwrap();
+    assertEqualStr(actual: renderSuite(result: suite, options: RunOptions(quiet: true)), expected: "");
+};
+
+fn summaryCountsAndFailures() -> void {
+    var text: str = renderRun(run: sample(), options: RunOptions());
+    assertStringContains(actual: text, needle: "FAIL: breaks");
+    assertStringContains(actual: text, needle: "1 passed");
+    assertStringContains(actual: text, needle: "1 failed");
+    assertStringContains(actual: text, needle: "1 skipped");
+    assertStringContains(actual: text, needle: "3 total");
+    assertStringContains(actual: text, needle: "Finished in");
+};
+
+fn colorOffMeansNoEscapes() -> void {
+    var text: str = renderRun(run: sample(), options: RunOptions(color: false));
+    assertFalse(actual: text.contains(needle: "[32m"));
+};
+
+fn colorOnPaintsOutput() -> void {
+    var text: str = renderRun(run: sample(), options: RunOptions(color: true));
+    assertStringContains(actual: text, needle: "[32m1 passed");
+    assertStringContains(actual: text, needle: "[31m1 failed");
+};
+
+fn listingGroupsBySuite() -> void {
+    var a: TestSuite = TestSuite(name: "Math", tests: [Test(name: "adds", run: good), Test(name: "subtracts", run: good)]);
+    var b: TestSuite = TestSuite(name: "Parser", tests: [Test(name: "parses", run: good)]);
+    assertEqualStr(actual: renderListing(suites: [a, b]), expected: "Math\n  adds\n  subtracts\n\nParser\n  parses\n");
+};
+
+fn reporterIsPluggable() -> void {
+    assertEqualStr(actual: consoleReporter().name, expected: "console");
+    assertEqualStr(actual: Reporter().name, expected: "silent");
+};
+
+fn cliDefaults() -> void {
+    var options: RunOptions = parseOptions(argv: [], colorAvailable: false).unwrap();
+    assertEqualStr(actual: options.filter, expected: "");
+    assertFalse(actual: options.verbose);
+    assertFalse(actual: options.failFast);
+    assertFalse(actual: options.list);
+    assertFalse(actual: options.quiet);
+};
+
+fn cliParsesEveryOption() -> void {
+    var options: RunOptions = parseOptions(
+        argv: ["--filter", "parser", "--verbose", "--fail-fast", "--list", "--quiet"],
+        colorAvailable: false,
+    ).unwrap();
+    assertEqualStr(actual: options.filter, expected: "parser");
+    assertTrue(actual: options.verbose);
+    assertTrue(actual: options.failFast);
+    assertTrue(actual: options.list);
+    assertTrue(actual: options.quiet);
+};
+
+fn cliParsesShortOptions() -> void {
+    var options: RunOptions = parseOptions(argv: ["-f", "x", "-v", "-q", "-l"], colorAvailable: false).unwrap();
+    assertEqualStr(actual: options.filter, expected: "x");
+    assertTrue(actual: options.verbose);
+    assertTrue(actual: options.quiet);
+    assertTrue(actual: options.list);
+};
+
+fn cliFilterEquals() -> void {
+    var options: RunOptions = parseOptions(argv: ["--filter=abc"], colorAvailable: false).unwrap();
+    assertEqualStr(actual: options.filter, expected: "abc");
+};
+
+fn cliColorRules() -> void {
+    assertTrue(actual: parseOptions(argv: [], colorAvailable: true).unwrap().color);
+    assertFalse(actual: parseOptions(argv: ["--no-color"], colorAvailable: true).unwrap().color);
+    assertFalse(actual: parseOptions(argv: [], colorAvailable: false).unwrap().color);
+};
+
+fn cliRejectsUnknownOptions() -> void {
+    assertFalse(actual: parseOptions(argv: ["--bogus"], colorAvailable: false).isOk());
+    assertFalse(actual: parseOptions(argv: ["--filter"], colorAvailable: false).isOk());
+};
+
+fn reportingSuite() -> TestSuite {
+    return TestSuite(name: "Reporting and CLI", tests: [
+        Test(name: "values render", run: valuesRender),
+        Test(name: "failure shows expected and received", run: failureRendersExpectedAndReceived),
+        Test(name: "suite lines show marks", run: suiteLinesShowMarks),
+        Test(name: "verbose shows durations", run: verboseShowsDurations),
+        Test(name: "quiet hides suite lines", run: quietHidesSuiteLines),
+        Test(name: "summary has counts and failures", run: summaryCountsAndFailures),
+        Test(name: "no escapes when colour is off", run: colorOffMeansNoEscapes),
+        Test(name: "colour on paints output", run: colorOnPaintsOutput),
+        Test(name: "listing groups tests by suite", run: listingGroupsBySuite),
+        Test(name: "reporters are values", run: reporterIsPluggable),
+        Test(name: "cli defaults", run: cliDefaults),
+        Test(name: "cli parses every option", run: cliParsesEveryOption),
+        Test(name: "cli parses short options", run: cliParsesShortOptions),
+        Test(name: "cli accepts --filter=value", run: cliFilterEquals),
+        Test(name: "cli colour rules", run: cliColorRules),
+        Test(name: "cli rejects bad input", run: cliRejectsUnknownOptions)
+    ]);
+};
+
+fn main() -> int {
+    return runMain(suites: [reportingSuite()]);
+};
