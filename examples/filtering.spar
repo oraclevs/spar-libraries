@@ -1,0 +1,16 @@
+import { Logger } from "../src/core/logger.spar";
+import { LoggerConfig } from "../src/core/config.spar";
+import { LogLevel } from "../src/core/level.spar";
+
+// Only warn, error and fatal are written.
+fn main() -> int {
+    var mut logger: Logger = Logger(
+        name: "app",
+        config: LoggerConfig(level: LogLevel::Warn),
+    );
+    logger.debug(message: "hidden");
+    logger.info(message: "hidden");
+    logger.warn(message: "shown on stderr");
+    logger.error(message: "shown on stderr");
+    return 0;
+};

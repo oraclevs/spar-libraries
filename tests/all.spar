@@ -1,0 +1,368 @@
+import pkg { Test } from "test/core/test";
+import pkg { TestSuite } from "test/core/suite";
+import pkg { assertTrue, assertFalse } from "test/assertions/basic";
+import pkg { assertEqual, assertEqualStr, assertEqualStrs } from "test/assertions/equality";
+import pkg { assertLength } from "test/assertions/collections";
+import pkg { assertStringContains, assertStartsWith } from "test/assertions/strings";
+import pkg { runMain } from "test/cli/runner";
+import pkg { readText, removeFile, exists } from "std/fs";
+import pkg { split, contains } from "std/text";
+import pkg { green } from "std/terminal";
+import { Logger, checkedLogger } from "../src/core/logger.spar";
+import { LoggerConfig } from "../src/core/config.spar";
+import { validateConfig } from "../src/core/config.spar";
+import { LogLevel, levelRank, levelAtLeast } from "../src/core/level.spar";
+import { LogRecord } from "../src/core/record.spar";
+import { LogField, strField, intField, floatField, boolField } from "../src/core/field.spar";
+import { Sink, memorySink, fileSink, customSink } from "../src/sink/sink.spar";
+import { Formatter, FormatStyle, prettyFormatter, compactFormatter, structuredFormatter, verboseFormatter, formatRecord } from "../src/format/formatter.spar";
+
+// The ANSI escape introducer, taken from the terminal library's own output.
+fn escape() -> str {
+    return split(value: green(text: "x"), separator: "32m")[0];
+};
+
+fn fixedClock() -> int {
+    return 1759413781000;
+};
+
+fn memConfig(level: LogLevel, formatter: Formatter) -> LoggerConfig {
+    return LoggerConfig(
+        level: level,
+        sinks: [Sink(kind: memorySink().kind, formatter: formatter)],
+        clock: fixedClock,
+    );
+};
+
+fn plain() -> Formatter {
+    return Formatter(style: FormatStyle::Pretty, showTimestamp: false);
+};
+
+fn memLogger(level: LogLevel, name: str) -> Logger {
+    return Logger(name: name, config: memConfig(level: level, formatter: plain()));
+};
+
+fn sampleRecord() -> LogRecord {
+    return LogRecord(
+        level: LogLevel::Info,
+        message: "Build completed",
+        timestamp: fixedClock(),
+        loggerName: "compiler",
+        fields: [strField(name: "target", value: "android"), intField(name: "port", value: 8080)],
+    );
+};
+
+// ---- levels
+fn levelOrdering() -> void {
+    assertTrue(actual: levelRank(level: LogLevel::Trace) < levelRank(level: LogLevel::Debug));
+    assertTrue(actual: levelRank(level: LogLevel::Debug) < levelRank(level: LogLevel::Info));
+    assertTrue(actual: levelRank(level: LogLevel::Info) < levelRank(level: LogLevel::Warn));
+    assertTrue(actual: levelRank(level: LogLevel::Warn) < levelRank(level: LogLevel::Error));
+    assertTrue(actual: levelRank(level: LogLevel::Error) < levelRank(level: LogLevel::Fatal));
+    assertTrue(actual: levelAtLeast(level: LogLevel::Fatal, minimum: LogLevel::Trace));
+    assertFalse(actual: levelAtLeast(level: LogLevel::Trace, minimum: LogLevel::Fatal));
+};
+
+fn infoFilters() -> void {
+    var mut logger: Logger = memLogger(level: LogLevel::Info, name: "");
+    logger.trace(message: "t");
+    logger.debug(message: "d");
+    logger.info(message: "i");
+    logger.warn(message: "w");
+    logger.error(message: "e");
+    logger.fatal(message: "f");
+    assertEqualStrs(
+        actual: logger.lines,
+        expected: ["INFO  i", "WARN  w", "ERROR e", "FATAL f"],
+    );
+};
+
+fn traceKeepsAll() -> void {
+    var mut logger: Logger = memLogger(level: LogLevel::Trace, name: "");
+    logger.log(level: LogLevel::Trace, message: "a");
+    logger.trace(message: "b");
+    logger.fatal(message: "c");
+    assertLength(items: logger.records, expected: 3);
+};
+
+fn disabledSkipsWork() -> void {
+    var mut logger: Logger = memLogger(level: LogLevel::Error, name: "");
+    assertFalse(actual: logger.enabled(level: LogLevel::Warn));
+    assertTrue(actual: logger.enabled(level: LogLevel::Fatal));
+    logger.warn(message: "x");
+    assertLength(items: logger.records, expected: 0);
+    assertLength(items: logger.lines, expected: 0);
+};
+
+fn fatalDoesNotExit() -> void {
+    var mut logger: Logger = memLogger(level: LogLevel::Info, name: "");
+    logger.fatal(message: "boom");
+    logger.info(message: "still running");
+    assertLength(items: logger.records, expected: 2);
+};
+
+// ---- records / fields
+fn recordHasMetadata() -> void {
+    var mut logger: Logger = memLogger(level: LogLevel::Info, name: "net");
+    logger.warn(message: "slow", fields: [intField(name: "ms", value: 900)]);
+    var record: LogRecord = logger.records[0];
+    assertEqualStr(actual: record.message, expected: "slow");
+    assertEqualStr(actual: record.loggerName, expected: "net");
+    assertTrue(actual: record.level == LogLevel::Warn);
+    assertEqual(actual: record.timestamp, expected: fixedClock());
+    assertEqualStr(actual: record.fields[0].value, expected: "900");
+};
+
+fn multipleRecords() -> void {
+    var mut logger: Logger = memLogger(level: LogLevel::Info, name: "");
+    logger.info(message: "one");
+    logger.info(message: "two");
+    logger.info(message: "three");
+    assertEqualStrs(actual: logger.lines, expected: ["INFO  one", "INFO  two", "INFO  three"]);
+};
+
+fn structuredFieldsText() -> void {
+    var mut logger: Logger = memLogger(level: LogLevel::Info, name: "");
+    logger.info(
+        message: "Build completed",
+        fields: [
+            strField(name: "target", value: "android"),
+            strField(name: "note", value: "a b"),
+            intField(name: "port", value: 8080),
+            floatField(name: "duration", value: 1.5),
+            boolField(name: "cached", value: true)
+        ],
+    );
+    assertEqualStr(
+        actual: logger.lines[0],
+        expected: "INFO  Build completed target=android note=\"a b\" port=8080 duration=1.5 cached=true",
+    );
+};
+
+// ---- formatters
+fn prettyFormat() -> void {
+    var text: str = formatRecord(formatter: plain(), record: sampleRecord());
+    assertEqualStr(actual: text, expected: "INFO  compiler Build completed target=android port=8080");
+};
+
+fn prettyTimestamp() -> void {
+    var text: str = formatRecord(formatter: prettyFormatter(), record: sampleRecord());
+    assertStringContains(actual: text, needle: " INFO  compiler Build completed");
+    assertEqual(actual: text.length(), expected: 8 + 1 + "INFO  compiler Build completed target=android port=8080".length());
+};
+
+fn compactFormat() -> void {
+    var text: str = formatRecord(formatter: compactFormatter(), record: sampleRecord());
+    assertEqualStr(actual: text, expected: "INFO compiler: Build completed target=android port=8080");
+    var bare: LogRecord = LogRecord(level: LogLevel::Error, message: "Build failed");
+    assertEqualStr(actual: formatRecord(formatter: compactFormatter(), record: bare), expected: "ERROR: Build failed");
+};
+
+fn structuredFormat() -> void {
+    var text: str = formatRecord(formatter: structuredFormatter(), record: sampleRecord());
+    assertStartsWith(actual: text, prefix: "{\"time\":\"2025-");
+    assertStringContains(actual: text, needle: "\"level\":\"info\",\"logger\":\"compiler\",\"message\":\"Build completed\"");
+    assertStringContains(actual: text, needle: "\"fields\":{\"target\":\"android\",\"port\":8080}");
+};
+
+fn structuredEscapes() -> void {
+    var rec: LogRecord = LogRecord(level: LogLevel::Info, message: "say \"hi\"");
+    var text: str = formatRecord(formatter: Formatter(style: FormatStyle::Structured, showTimestamp: false), record: rec);
+    assertEqualStr(actual: text, expected: "{\"level\":\"info\",\"message\":\"say \\\"hi\\\"\"}");
+};
+
+fn verboseFormat() -> void {
+    var text: str = formatRecord(formatter: Formatter(style: verboseFormatter().style, showTimestamp: false), record: sampleRecord());
+    assertEqualStr(actual: text, expected: "info: Build completed\n  --> compiler\n   |\n   = target: android\n   = port: 8080");
+};
+
+fn colorOnOff() -> void {
+    var on: str = formatRecord(formatter: Formatter(showTimestamp: false, color: true), record: sampleRecord());
+    var off: str = formatRecord(formatter: plain(), record: sampleRecord());
+    assertTrue(actual: contains(value: on, needle: escape()));
+    assertFalse(actual: contains(value: off, needle: escape()));
+    assertStringContains(actual: off, needle: "INFO  compiler");
+};
+
+// ---- named + context loggers
+fn namedLogger() -> void {
+    var mut logger: Logger = memLogger(level: LogLevel::Info, name: "compiler");
+    logger.info(message: "compilation started");
+    assertEqualStr(actual: logger.lines[0], expected: "INFO  compiler compilation started");
+    var mut child: Logger = logger.named(name: "parser");
+    child.info(message: "ok");
+    assertEqualStr(actual: child.lines[0], expected: "INFO  parser ok");
+};
+
+fn contextLogger() -> void {
+    var base: Logger = memLogger(level: LogLevel::Info, name: "server");
+    var mut req: Logger = base.withFields(fields: [strField(name: "requestId", value: "abc123")]);
+    req.info(message: "Request received", fields: [intField(name: "n", value: 1)]);
+    assertEqualStr(actual: req.lines[0], expected: "INFO  server Request received requestId=abc123 n=1");
+    assertLength(items: base.context, expected: 0);
+};
+
+// ---- filter + sinks
+fn onlyEven(record: LogRecord) -> bool {
+    return record.message == "keep";
+};
+
+fn customFilter() -> void {
+    var cfg: LoggerConfig = LoggerConfig(
+        level: LogLevel::Info,
+        sinks: [memorySink()],
+        useFilter: true,
+        filter: onlyEven,
+    );
+    var mut logger: Logger = Logger(config: cfg);
+    logger.info(message: "keep");
+    logger.info(message: "drop");
+    assertLength(items: logger.records, expected: 1);
+};
+
+fn sinkMinLevel() -> void {
+    var cfg: LoggerConfig = LoggerConfig(
+        level: LogLevel::Trace,
+        sinks: [Sink(kind: memorySink().kind, minLevel: LogLevel::Warn)],
+    );
+    var mut logger: Logger = Logger(config: cfg);
+    logger.info(message: "no");
+    logger.error(message: "yes");
+    assertLength(items: logger.records, expected: 1);
+};
+
+fn multipleSinks() -> void {
+    var path: str = "/tmp/spar_log_multi_test.log";
+    if exists(path: path) {
+        removeFile(path: path);
+    }
+    var cfg: LoggerConfig = LoggerConfig(
+        level: LogLevel::Info,
+        sinks: [memorySink(), Sink(kind: fileSink(path: path).kind, path: path, formatter: compactFormatter())],
+    );
+    var mut logger: Logger = Logger(config: cfg);
+    logger.info(message: "a");
+    logger.warn(message: "b");
+    assertLength(items: logger.records, expected: 2);
+    assertEqualStr(actual: readText(path: path), expected: "INFO: a\nWARN: b\n");
+    removeFile(path: path);
+};
+
+fn fileAppends() -> void {
+    var path: str = "/tmp/spar_log_append_test.log";
+    if exists(path: path) {
+        removeFile(path: path);
+    }
+    var cfg: LoggerConfig = LoggerConfig(sinks: [fileSink(path: path)]);
+    var mut first: Logger = Logger(config: cfg);
+    first.info(message: "one");
+    var mut second: Logger = Logger(config: cfg);
+    second.info(message: "two");
+    var text: str = readText(path: path);
+    assertFalse(actual: text.length() == 0);
+    assertStringContains(actual: text, needle: "one\n");
+    assertStringContains(actual: text, needle: "two\n");
+    assertFalse(actual: contains(value: text, needle: escape()));
+    removeFile(path: path);
+};
+
+fn fileNoEscapes() -> void {
+    var path: str = "/tmp/spar_log_color_test.log";
+    if exists(path: path) {
+        removeFile(path: path);
+    }
+    var mut logger: Logger = Logger(config: LoggerConfig(sinks: [fileSink(path: path)]));
+    logger.error(message: "bad");
+    var text: str = readText(path: path);
+    assertFalse(actual: contains(value: text, needle: escape()));
+    assertStringContains(actual: text, needle: "ERROR bad");
+    removeFile(path: path);
+};
+
+fn sinkFailureCounted() -> void {
+    var cfg: LoggerConfig = LoggerConfig(
+        sinks: [fileSink(path: "/nonexistent/dir/x.log"), memorySink()],
+        reportFailures: false,
+    );
+    var mut logger: Logger = Logger(config: cfg);
+    logger.info(message: "x");
+    assertEqual(actual: logger.sinkErrors, expected: 1);
+    assertStringContains(actual: logger.lastError, needle: "cannot open");
+    assertLength(items: logger.records, expected: 1);
+};
+
+fn recordsReachCustomSink() -> void {
+    var mut logger: Logger = Logger(config: LoggerConfig(sinks: [customSink(write: noopWrite)]));
+    logger.info(message: "x");
+    assertEqual(actual: logger.sinkErrors, expected: 0);
+};
+
+fn noopWrite(text: str) -> void {
+    return;
+};
+
+// ---- config validation
+fn validation() -> void {
+    assertLength(items: validateConfig(config: LoggerConfig()), expected: 0);
+    var none: LoggerConfig = LoggerConfig(sinks: []);
+    assertEqualStr(actual: validateConfig(config: none)[0], expected: "no sinks configured");
+    var empty: LoggerConfig = LoggerConfig(sinks: [fileSink(path: "")]);
+    assertEqualStr(actual: validateConfig(config: empty)[0], expected: "file sink has an empty path");
+    var dup: LoggerConfig = LoggerConfig(sinks: [fileSink(path: "a.log"), fileSink(path: "a.log")]);
+    assertEqualStr(actual: validateConfig(config: dup)[0], expected: "duplicate file sink: a.log");
+    var colored: LoggerConfig = LoggerConfig(
+        sinks: [Sink(kind: fileSink(path: "a").kind, path: "a", formatter: Formatter(color: true))],
+    );
+    assertStringContains(actual: validateConfig(config: colored)[0], needle: "must not use color");
+};
+
+fn checkedBuilds() -> void {
+    var bad: Result<Logger, str> = checkedLogger(name: "x", config: LoggerConfig(sinks: []));
+    assertTrue(actual: bad.isErr());
+    var good: Result<Logger, str> = checkedLogger(name: "x", config: LoggerConfig());
+    assertTrue(actual: good.isOk());
+};
+
+fn main() -> int {
+    var suites: List<TestSuite> = [
+        TestSuite(name: "levels", tests: [
+            Test(name: "ordering", run: levelOrdering),
+            Test(name: "info filters trace/debug", run: infoFilters),
+            Test(name: "trace keeps all", run: traceKeepsAll),
+            Test(name: "disabled logs skipped", run: disabledSkipsWork),
+            Test(name: "fatal does not exit", run: fatalDoesNotExit)
+        ]),
+        TestSuite(name: "records", tests: [
+            Test(name: "metadata", run: recordHasMetadata),
+            Test(name: "multiple records", run: multipleRecords),
+            Test(name: "typed fields text", run: structuredFieldsText)
+        ]),
+        TestSuite(name: "formatters", tests: [
+            Test(name: "pretty", run: prettyFormat),
+            Test(name: "pretty timestamp", run: prettyTimestamp),
+            Test(name: "compact", run: compactFormat),
+            Test(name: "structured json", run: structuredFormat),
+            Test(name: "json escaping", run: structuredEscapes),
+            Test(name: "verbose", run: verboseFormat),
+            Test(name: "color on/off", run: colorOnOff)
+        ]),
+        TestSuite(name: "loggers", tests: [
+            Test(name: "named", run: namedLogger),
+            Test(name: "context", run: contextLogger)
+        ]),
+        TestSuite(name: "sinks", tests: [
+            Test(name: "custom filter", run: customFilter),
+            Test(name: "sink min level", run: sinkMinLevel),
+            Test(name: "multiple sinks", run: multipleSinks),
+            Test(name: "file appends", run: fileAppends),
+            Test(name: "file has no escapes", run: fileNoEscapes),
+            Test(name: "sink failure counted", run: sinkFailureCounted),
+            Test(name: "custom sink", run: recordsReachCustomSink)
+        ]),
+        TestSuite(name: "config", tests: [
+            Test(name: "validation", run: validation),
+            Test(name: "checkedLogger", run: checkedBuilds)
+        ])
+    ];
+    return runMain(suites: suites);
+};

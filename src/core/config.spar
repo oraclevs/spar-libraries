@@ -1,0 +1,50 @@
+import { LogLevel } from "./level.spar";
+import { LogRecord } from "./record.spar";
+import { Sink, SinkKind, consoleSink } from "../sink/sink.spar";
+import pkg { nowMillis } from "std/time";
+
+fn acceptAll(record: LogRecord) -> bool {
+    return true;
+};
+
+// Logger settings. Every field has a default.
+//   level          minimum severity; lower records are dropped before any work
+//   sinks          destinations; each record goes to every sink that accepts it
+//   filter         extra predicate, used when useFilter is true
+//   clock          source of timestamps (epoch millis); swap it in tests
+//   reportFailures when a sink throws, print one line to stderr
+export struct LoggerConfig {
+    level: LogLevel = LogLevel::Info;
+    sinks: List<Sink> = [consoleSink()];
+    useFilter: bool = false;
+    filter: fn(LogRecord) -> bool = acceptAll;
+    clock: fn() -> int = nowMillis;
+    reportFailures: bool = true;
+};
+
+// Returns a list of problems; empty means valid.
+fn validateConfig(config: LoggerConfig) -> List<str> {
+    var mut problems: List<str> = [];
+    if config.sinks.length() == 0 {
+        problems.append(value: "no sinks configured");
+    }
+    var mut seen: List<str> = [];
+    for sink in config.sinks {
+        if sink.kind == SinkKind::File {
+            if sink.path == "" {
+                problems.append(value: "file sink has an empty path");
+            } else {
+                for other in seen {
+                    if other == sink.path {
+                        problems.append(value: "duplicate file sink: " + sink.path);
+                    }
+                }
+                seen.append(value: sink.path);
+            }
+            if sink.formatter.color {
+                problems.append(value: "file sink must not use color: " + sink.path);
+            }
+        }
+    }
+    return problems;
+};

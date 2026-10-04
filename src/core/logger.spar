@@ -1,0 +1,144 @@
+import pkg { appendText } from "std/fs";
+import pkg { println, eprintln } from "std/io";
+import { LogLevel, levelAtLeast } from "./level.spar";
+import { LogField } from "./field.spar";
+import { LogRecord } from "./record.spar";
+import { LoggerConfig, validateConfig } from "./config.spar";
+import { Sink, SinkKind } from "../sink/sink.spar";
+import { formatRecord } from "../format/formatter.spar";
+
+// Entry point of the library. Use `var mut logger = Logger(...)`.
+//
+// Flow of one call: level check -> build LogRecord -> filter -> for each sink:
+// format -> write. A record below the minimum level costs one comparison.
+// `context` fields are added to every record. `records` / `lines` hold what
+// Memory sinks collected. fatal() only logs; it never exits.
+export struct Logger {
+    name: str = "";
+    config: LoggerConfig = LoggerConfig();
+    context: List<LogField> = [];
+    records: List<LogRecord> = [];
+    lines: List<str> = [];
+    sinkErrors: int = 0;
+    lastError: str = "";
+};
+
+fn writeSink(sink: Sink, text: str, level: LogLevel) -> void {
+    if sink.kind == SinkKind::Console {
+        if levelAtLeast(level: level, minimum: sink.stderrFrom) {
+            eprintln(value: text);
+        } else {
+            println(value: text);
+        }
+    } else if sink.kind == SinkKind::File {
+        appendText(path: sink.path, content: text + "\n");
+    } else if sink.kind == SinkKind::Custom {
+        var write: fn(str) -> void = sink.write;
+        write(arg0: text);
+    }
+};
+
+// Logger-side failures (a sink that throws) never go back through the logger,
+// so they cannot recurse: they are counted, remembered, and optionally printed
+// once to stderr.
+impl Logger {
+    fn enabled(self, level: LogLevel) -> bool {
+        return levelAtLeast(level: level, minimum: self.config.level);
+    };
+
+    // Empty when the config is valid.
+    fn problems(self) -> List<str> {
+        return validateConfig(config: self.config);
+    };
+
+    fn log(mut self, level: LogLevel, message: str, fields: List<LogField> = []) -> void {
+        if !self.enabled(level: level) {
+            return;
+        }
+        var mut all: List<LogField> = self.context;
+        for field in fields {
+            all.append(value: field);
+        }
+        var clock: fn() -> int = self.config.clock;
+        var record: LogRecord = LogRecord(
+            level: level,
+            message: message,
+            timestamp: clock(),
+            loggerName: self.name,
+            fields: all,
+        );
+        if self.config.useFilter {
+            var accept: fn(LogRecord) -> bool = self.config.filter;
+            if !accept(arg0: record) {
+                return;
+            }
+        }
+        for sink in self.config.sinks {
+            if levelAtLeast(level: level, minimum: sink.minLevel) {
+                try {
+                    var text: str = formatRecord(formatter: sink.formatter, record: record);
+                    if sink.kind == SinkKind::Memory {
+                        self.records.append(value: record);
+                        self.lines.append(value: text);
+                    } else {
+                        writeSink(sink: sink, text: text, level: level);
+                    }
+                } catch problem {
+                    self.sinkErrors = self.sinkErrors + 1;
+                    self.lastError = problem.message;
+                    if self.config.reportFailures {
+                        eprintln(value: "spar-log: sink failed: " + problem.message);
+                    }
+                }
+            }
+        }
+    };
+
+    fn trace(mut self, message: str, fields: List<LogField> = []) -> void {
+        self.log(level: LogLevel::Trace, message: message, fields: fields);
+    };
+
+    fn debug(mut self, message: str, fields: List<LogField> = []) -> void {
+        self.log(level: LogLevel::Debug, message: message, fields: fields);
+    };
+
+    fn info(mut self, message: str, fields: List<LogField> = []) -> void {
+        self.log(level: LogLevel::Info, message: message, fields: fields);
+    };
+
+    fn warn(mut self, message: str, fields: List<LogField> = []) -> void {
+        self.log(level: LogLevel::Warn, message: message, fields: fields);
+    };
+
+    fn error(mut self, message: str, fields: List<LogField> = []) -> void {
+        self.log(level: LogLevel::Error, message: message, fields: fields);
+    };
+
+    fn fatal(mut self, message: str, fields: List<LogField> = []) -> void {
+        self.log(level: LogLevel::Fatal, message: message, fields: fields);
+    };
+
+    // A copy that adds `fields` to every record. Memory-sink output of the
+    // child stays in the child.
+    fn withFields(self, fields: List<LogField>) -> Logger {
+        var mut all: List<LogField> = self.context;
+        for field in fields {
+            all.append(value: field);
+        }
+        return Logger(name: self.name, config: self.config, context: all);
+    };
+
+    // A copy with another name (e.g. a per-module logger).
+    fn named(self, name: str) -> Logger {
+        return Logger(name: name, config: self.config, context: self.context);
+    };
+};
+
+// Builds a logger only when its config is valid.
+fn checkedLogger(name: str, config: LoggerConfig) -> Result<Logger, str> {
+    var problems: List<str> = validateConfig(config: config);
+    if problems.length() > 0 {
+        return err<Logger, str>(error: problems[0]);
+    }
+    return ok<Logger, str>(value: Logger(name: name, config: config));
+};

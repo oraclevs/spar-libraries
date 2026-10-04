@@ -1,0 +1,22 @@
+import { Logger } from "../src/core/logger.spar";
+import { LoggerConfig } from "../src/core/config.spar";
+import { strField, intField } from "../src/core/field.spar";
+import { Sink, SinkKind } from "../src/sink/sink.spar";
+import { structuredFormatter, compactFormatter } from "../src/format/formatter.spar";
+
+fn main() -> int {
+    // Same record, written as JSON and as compact text.
+    var mut logger: Logger = Logger(
+        name: "server",
+        config: LoggerConfig(sinks: [
+            Sink(kind: SinkKind::Console, formatter: structuredFormatter()),
+            Sink(kind: SinkKind::Console, formatter: compactFormatter())
+        ]),
+    );
+    var mut request: Logger = logger.withFields(fields: [strField(name: "requestId", value: "abc123")]);
+    request.info(
+        message: "Request received",
+        fields: [strField(name: "operation", value: "login"), intField(name: "port", value: 8080)],
+    );
+    return 0;
+};

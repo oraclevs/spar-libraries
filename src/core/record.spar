@@ -1,0 +1,12 @@
+import { LogLevel } from "./level.spar";
+import { LogField } from "./field.spar";
+
+// What a logger call produces. Formatters and sinks see only this.
+// `timestamp` is milliseconds since the epoch; 0 means unknown.
+export struct LogRecord {
+    level: LogLevel;
+    message: str;
+    timestamp: int = 0;
+    loggerName: str = "";
+    fields: List<LogField> = [];
+};

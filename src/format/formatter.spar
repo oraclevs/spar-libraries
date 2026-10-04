@@ -1,0 +1,260 @@
+import pkg { stringify } from "std/json";
+import pkg { split, upper, contains } from "std/text";
+import pkg { formatIso8601 } from "std/time";
+import pkg {
+    red,
+    green,
+    yellow,
+    blue,
+    bold
+} from "std/terminal";
+import { LogLevel, levelName } from "../core/level.spar";
+import { LogField, LogFieldKind } from "../core/field.spar";
+import { LogRecord } from "../core/record.spar";
+
+export enum FormatStyle {
+    Pretty,
+    Compact,
+    Structured,
+    Verbose
+};
+
+// Turns a LogRecord into one line of text. `custom` replaces the built-in
+// styles when `useCustom` is true.
+export struct Formatter {
+    style: FormatStyle = FormatStyle::Pretty;
+    showTimestamp: bool = true;
+    showLevel: bool = true;
+    showLoggerName: bool = true;
+    color: bool = false;
+    useCustom: bool = false;
+    custom: fn(arg0: LogRecord) -> str = emptyFormat;
+};
+
+fn emptyFormat(record: LogRecord) -> str {
+    return record.message;
+};
+
+fn prettyFormatter() -> Formatter {
+    return Formatter(style: FormatStyle::Pretty);
+};
+
+fn compactFormatter() -> Formatter {
+    return Formatter(style: FormatStyle::Compact, showTimestamp: false);
+};
+
+// Rust-diagnostic look: "error: msg", then "  --> logger", then "= key: value" lines.
+fn verboseFormatter() -> Formatter {
+    return Formatter(style: FormatStyle::Verbose);
+};
+
+fn structuredFormatter() -> Formatter {
+    return Formatter(style: FormatStyle::Structured);
+};
+
+fn padRight(text: str, width: int) -> str {
+    var mut out: str = text;
+    var mut size: int = text.length();
+    while size < width {
+        out = out + " ";
+        size = size + 1;
+    }
+    return out;
+};
+
+// "HH:MM:SS" from epoch milliseconds (UTC).
+fn clockTime(millis: int) -> str {
+    var iso: str = formatIso8601(millis: millis);
+    var halves: List<str> = split(value: iso, separator: "T");
+    if halves.length() < 2 {
+        return iso;
+    }
+    var clock: List<str> = split(value: halves[1], separator: ".");
+    return clock[0];
+};
+
+fn colorLevel(text: str, level: LogLevel) -> str {
+    if level == LogLevel::Debug {
+        return blue(text: text);
+    } else if level == LogLevel::Info {
+        return green(text: text);
+    } else if level == LogLevel::Warn {
+        return yellow(text: text);
+    } else if level == LogLevel::Error {
+        return red(text: text);
+    } else if level == LogLevel::Fatal {
+        return bold(text: red(text: text));
+    }
+    return text;
+};
+
+// key=value, with the value quoted when it holds spaces or '='.
+fn fieldText(field: LogField, color: bool = false) -> str {
+    var mut key: str = field.name;
+    if color {
+        key = blue(text: field.name);
+    }
+    if field.kind == LogFieldKind::Text {
+        if field.value == ""
+            || contains(value: field.value, needle: " ")
+            || contains(value: field.value, needle: "=") {
+            return key + "=" + stringify(value: field.value);
+        }
+    }
+    return key + "=" + field.value;
+};
+
+fn fieldsText(fields: List<LogField>, color: bool = false) -> str {
+    var mut out: str = "";
+    for field in fields {
+        out = out + " " + fieldText(field: field, color: color);
+    }
+    return out;
+};
+
+fn jsonValue(field: LogField) -> str {
+    if field.kind == LogFieldKind::Text {
+        return stringify(value: field.value);
+    }
+    return field.value;
+};
+
+fn structured(formatter: Formatter, record: LogRecord) -> str {
+    var mut out: str = "{";
+    if formatter.showTimestamp && record.timestamp > 0 {
+        out = out + "\"time\":" + stringify(value: formatIso8601(
+            millis: record.timestamp,
+        )) + ",";
+    }
+    out = out + "\"level\":" + stringify(
+        value: levelName(level: record.level),
+    ) + ",";
+    if record.loggerName != "" {
+        out = out + "\"logger\":" + stringify(value: record.loggerName) + ",";
+    }
+    out = out + "\"message\":" + stringify(value: record.message);
+    if record.fields.length() > 0 {
+        out = out + ",\"fields\":{";
+        var mut first: bool = true;
+        for field in record.fields {
+            if !first {
+                out = out + ",";
+            }
+            first = false;
+            out = out + stringify(value: field.name) + ":" + jsonValue(
+                field: field,
+            );
+        }
+        out = out + "}";
+    }
+    return out + "}";
+};
+
+fn pretty(formatter: Formatter, record: LogRecord) -> str {
+    var mut parts: List<str> = [];
+    if formatter.showTimestamp && record.timestamp > 0 {
+        parts.append(value: clockTime(millis: record.timestamp));
+    }
+    if formatter.showLevel {
+        var mut label: str = padRight(
+            text: upper(value: levelName(level: record.level)),
+            width: 5,
+        );
+        if formatter.color {
+            label = colorLevel(text: label, level: record.level);
+        }
+        parts.append(value: label);
+    }
+    if formatter.showLoggerName && record.loggerName != "" {
+        if formatter.color {
+            parts.append(value: bold(text: record.loggerName));
+        } else {
+            parts.append(value: record.loggerName);
+        }
+    }
+    parts.append(value: record.message);
+    var mut out: str = "";
+    var mut first: bool = true;
+    for part in parts {
+        if !first {
+            out = out + " ";
+        }
+        first = false;
+        out = out + part;
+    }
+    return out + fieldsText(fields: record.fields, color: formatter.color);
+};
+
+fn verbose(formatter: Formatter, record: LogRecord) -> str {
+    var mut label: str = levelName(level: record.level) + ":";
+    var mut arrow: str = "  -->";
+    var mut bar: str = "   |";
+    var mut eq: str = "   =";
+    if formatter.color {
+        label = bold(text: colorLevel(text: label, level: record.level));
+        arrow = blue(text: bold(text: arrow));
+        bar = blue(text: bar);
+        eq = blue(text: eq);
+    }
+    var mut out: str = label + " " + record.message;
+    var mut place: str = "";
+    if formatter.showLoggerName && record.loggerName != "" {
+        place = record.loggerName;
+    }
+    if formatter.showTimestamp && record.timestamp > 0 {
+        if place != "" {
+            place = place + " ";
+        }
+        place = place + "at " + clockTime(millis: record.timestamp);
+    }
+    if place != "" {
+        out = out + "\n" + arrow + " " + place;
+    }
+    if record.fields.length() > 0 {
+        out = out + "\n" + bar;
+        for field in record.fields {
+            var mut key: str = field.name;
+            if formatter.color {
+                key = bold(text: field.name);
+            }
+            out = out + "\n" + eq + " " + key + ": " + field.value;
+        }
+    }
+    return out;
+};
+
+fn compact(formatter: Formatter, record: LogRecord) -> str {
+    var mut head: str = "";
+    if formatter.showLevel {
+        var mut label: str = upper(value: levelName(level: record.level));
+        if formatter.color {
+            label = colorLevel(text: label, level: record.level);
+        }
+        head = label;
+    }
+    if formatter.showLoggerName && record.loggerName != "" {
+        head = head + " " + record.loggerName;
+    }
+    if head != "" {
+        head = head + ": ";
+    }
+    return head + record.message + fieldsText(
+        fields: record.fields,
+        color: formatter.color,
+    );
+};
+
+fn formatRecord(formatter: Formatter, record: LogRecord) -> str {
+    if formatter.useCustom {
+        var custom: fn(arg0: LogRecord) -> str = formatter.custom;
+        return custom(arg0: record);
+    }
+    if formatter.style == FormatStyle::Structured {
+        return structured(formatter: formatter, record: record);
+    } else if formatter.style == FormatStyle::Verbose {
+        return verbose(formatter: formatter, record: record);
+    } else if formatter.style == FormatStyle::Compact {
+        return compact(formatter: formatter, record: record);
+    }
+    return pretty(formatter: formatter, record: record);
+};
