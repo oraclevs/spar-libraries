@@ -2,3 +2,7 @@
 /package/native/
 
 /dist/
+/target/
+/dist/
+/spar.package.lock.spar
+*.key
