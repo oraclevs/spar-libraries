@@ -1,0 +1,33 @@
+import { Test } from "../src/core/test.spar";
+import { TestSuite } from "../src/core/suite.spar";
+import { assertTrue, assertFalse } from "../src/assertions/basic.spar";
+import { assertEqual, assertEqualStr } from "../src/assertions/equality.spar";
+import { runMain } from "../src/cli/runner.spar";
+
+fn additionWorks() -> void {
+    assertEqual(actual: 2 + 2, expected: 4);
+};
+
+fn subtractionWorks() -> void {
+    assertEqual(actual: 5 - 3, expected: 2);
+};
+
+fn greeting() -> void {
+    var name: str = "spar";
+    assertEqualStr(actual: "hello ${name}", expected: "hello spar");
+    assertTrue(actual: name.length() == 4);
+    assertFalse(actual: name.length() == 5);
+};
+
+fn main() -> int {
+    var suite: TestSuite = TestSuite(
+        name: "Basics",
+        tests: [
+            Test(name: "addition works", run: additionWorks),
+            Test(name: "subtraction works", run: subtractionWorks),
+            Test(name: "greeting", run: greeting),
+            Test(name: "not ready yet", run: greeting, enabled: false)
+        ],
+    );
+    return runMain(suites: [suite]);
+};

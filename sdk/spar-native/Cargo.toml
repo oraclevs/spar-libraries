@@ -1,0 +1,10 @@
+[package]
+name = "spar-native"
+version = "0.0.1"
+edition = "2021"
+description = "Safe Rust SDK for writing Spar native modules (ABI 1.0)"
+license = "MIT"
+
+[dependencies]
+spar-native-sys = { path = "../spar-native-sys", version = "0.0.1" }
+spar-native-macros = { path = "../spar-native-macros", version = "0.0.1" }

@@ -1,0 +1,33 @@
+import { Failure } from "../result/failure.spar";
+import { encodeFailure, decodeFailure } from "./codec.spar";
+
+// How an assertion stops its test, and how the runner learns why.
+//
+// Spar's `panic` cannot be caught, and module-level state is private to each
+// importing module, so neither a panic nor a shared "current failure" variable
+// works. What can be recovered is a runtime error under try/catch, and the
+// caught error's `message` is readable. `failNow` raises such an error whose
+// message is the encoded Failure; `failureFrom` decodes it again.
+// This file is the one place that knows the trick, so a real `throw` in Spar
+// would only change these two functions.
+fn marker() -> str {
+    return "@@spartest@@";
+};
+
+// Stops the current test. Must run under the runner's try/catch; anywhere
+// else it ends the program with a runtime error.
+fn failNow(failure: Failure) -> void {
+    var carrier: Result<int, str> = err<int, str>(error: "assertion failed");
+    var unused: int = carrier.expect(message: marker() + encodeFailure(failure: failure));
+    return;
+};
+
+// Rebuilds the Failure from a caught error message. Errors that are not
+// assertions (division by zero, unwrapping none, ...) become an "error" failure.
+fn failureFrom(caught: str, label: str) -> Failure {
+    var parts: List<str> = caught.split(separator: marker());
+    if parts.length() < 2 {
+        return Failure(assertion: "error", message: "runtime error in ${label}: ${caught}");
+    }
+    return decodeFailure(source: parts.get(index: 1).unwrap());
+};

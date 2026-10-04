@@ -1,0 +1,107 @@
+import { ValueKind } from "../config/value_spec.spar";
+import { charAt, dropPrefix, isDigit } from "./text.spar";
+import pkg { parse } from "std/json";
+
+fn toInt(text: str) -> Option<int> {
+    var mut body: str = text.trim();
+    var mut negative: bool = false;
+    if body.startsWith(prefix: "-") {
+        negative = true;
+        body = dropPrefix(text: body, count: 1);
+    } else if body.startsWith(prefix: "+") {
+        body = dropPrefix(text: body, count: 1);
+    }
+    if body.length() == 0 || body.length() > 18 {
+        return none();
+    }
+    var mut total: int = 0;
+    var mut i: int = 0;
+    while i < body.length() {
+        var ch: str = charAt(text: body, index: i);
+        if !isDigit(ch: ch) {
+            return none();
+        }
+        total = total * 10 + "0123456789"
+            .indexOf(needle: ch)
+            .unwrapOr(fallback: 0);
+        i = i + 1;
+    }
+    if negative {
+        return some(value: 0 - total);
+    }
+    return some(value: total);
+};
+
+fn toFloat(text: str) -> Option<float> {
+    var mut body: str = text.trim();
+    if body.startsWith(prefix: "+") {
+        body = dropPrefix(text: body, count: 1);
+    }
+    if body.startsWith(prefix: ".") {
+        body = "0" + body;
+    } else if body.startsWith(prefix: "-.") {
+        body = "-0" + dropPrefix(text: body, count: 1);
+    }
+    if body.length() == 0 || body.endsWith(suffix: ".") {
+        return none();
+    }
+    try {
+        return some(value: parse<float>(text: body));
+    } catch problem {
+        return none();
+    }
+};
+
+fn toBool(text: str) -> Option<bool> {
+    var word: str = text.trim().lower();
+    if word == "true" || word == "yes" || word == "on" || word == "1" {
+        return some(value: true);
+    }
+    if word == "false" || word == "no" || word == "off" || word == "0" {
+        return some(value: false);
+    }
+    return none();
+};
+
+fn kindName(kind: ValueKind) -> str {
+    if kind == ValueKind::Int {
+        return "integer";
+    }
+    if kind == ValueKind::Float {
+        return "number";
+    }
+    if kind == ValueKind::Bool {
+        return "boolean";
+    }
+    return "string";
+};
+
+// Checks `text` against `kind`. Returns the canonical spelling to store:
+// booleans become "true"/"false" and numbers are re-printed.
+fn canonicalize(text: str, kind: ValueKind) -> Option<str> {
+    if kind == ValueKind::Int {
+        var parsed: Option<int> = toInt(text: text);
+        if parsed.isNone() {
+            return none();
+        }
+        return some(value: "${parsed.unwrap()}");
+    }
+    if kind == ValueKind::Float {
+        var parsed: Option<float> = toFloat(text: text);
+        if parsed.isNone() {
+            return none();
+        }
+        return some(value: "${parsed.unwrap()}");
+    }
+    if kind == ValueKind::Bool {
+        var parsed: Option<bool> = toBool(text: text);
+        if parsed.isNone() {
+            return none();
+        }
+        if parsed.unwrap() {
+            return some(value: "true");
+        }
+        return some(value: "false");
+    }
+    return some(value: text);
+};

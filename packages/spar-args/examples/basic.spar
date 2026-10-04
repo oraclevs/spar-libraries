@@ -1,0 +1,58 @@
+// A tiny greeter.
+//
+//   spar examples/basic.spar Ada
+//   spar examples/basic.spar Ada --shout --times 2
+//   spar examples/basic.spar --help
+import { Cli } from "../src/config/cli.spar";
+import { ArgOption } from "../src/config/option.spar";
+import { Flag } from "../src/config/flag.spar";
+import { Positional } from "../src/config/positional.spar";
+import { ValueSpec, ValueKind } from "../src/config/value_spec.spar";
+import { Matches } from "../src/result/matches.spar";
+import { parseOrExit } from "../src/parser/parser.spar";
+
+fn buildCli() -> Cli {
+    return Cli(
+        name: "greet",
+        version: "1.0.0",
+        about: "Say hello",
+        positionals: [
+            Positional(name: "who", required: true, help: "Who to greet")
+        ],
+        options: [
+            ArgOption(
+                name: "times",
+                short: "n",
+                long: "times",
+                valueName: "N",
+                defaultValues: ["1"],
+                value: ValueSpec(kind: ValueKind::Int),
+                help: "How many times to greet",
+            )
+        ],
+        flags: [
+            Flag(
+                name: "shout",
+                short: "s",
+                long: "shout",
+                help: "Use upper case",
+            )
+        ],
+    );
+};
+
+fn main() -> int {
+    var matches: Matches = parseOrExit(cli: buildCli());
+    var who: str = matches.getStr(name: "who").unwrap();
+    var times: int = matches.getInt(name: "times").unwrapOr(fallback: 1);
+    var mut line: str = "Hello, ${who}!";
+    if matches.flag(name: "shout") {
+        line = line.upper();
+    }
+    var mut i: int = 0;
+    while i < times {
+        println(value: line);
+        i = i + 1;
+    }
+    return 0;
+};

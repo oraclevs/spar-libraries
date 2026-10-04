@@ -1,0 +1,24 @@
+import { Failure } from "../result/failure.spar";
+import { strValue } from "../result/value.spar";
+import { failNow } from "../core/context.spar";
+
+fn assertStringContains(actual: str, needle: str, message: str = "") -> void {
+    if !actual.contains(needle: needle) {
+        failNow(failure: Failure(assertion: "assertStringContains", message: message, expected: strValue(value: needle), actual: strValue(value: actual)));
+    }
+    return;
+};
+
+fn assertStartsWith(actual: str, prefix: str, message: str = "") -> void {
+    if !actual.startsWith(prefix: prefix) {
+        failNow(failure: Failure(assertion: "assertStartsWith", message: message, expected: strValue(value: prefix), actual: strValue(value: actual)));
+    }
+    return;
+};
+
+fn assertEndsWith(actual: str, suffix: str, message: str = "") -> void {
+    if !actual.endsWith(suffix: suffix) {
+        failNow(failure: Failure(assertion: "assertEndsWith", message: message, expected: strValue(value: suffix), actual: strValue(value: actual)));
+    }
+    return;
+};

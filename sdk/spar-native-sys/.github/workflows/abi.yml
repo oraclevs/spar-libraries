@@ -1,0 +1,38 @@
+name: Native ABI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  layout-and-header:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Enable MSVC tools
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+      - name: Check C and Rust ABI layout
+        run: cargo test --test abi_golden
+      - name: Run Rust ABI tests
+        run: cargo test --lib
+      - name: Build native examples
+        if: runner.os != 'Windows'
+        run: |
+          ./examples/native/c-fastmath/build.sh
+          ./examples/native/cpp-textkit/build.sh
+          ./examples/native/bench-kernels/build.sh
+      - name: Build C example with MSVC
+        if: runner.os == 'Windows'
+        shell: cmd
+        run: cl /nologo /LD /O2 /Iinclude examples\native\c-fastmath\fastmath.c /link /OUT:%TEMP%\fastmath.dll
+      - name: Build C++ and benchmark examples with MSVC
+        if: runner.os == 'Windows'
+        shell: cmd
+        run: |
+          cl /nologo /LD /O2 /EHsc /std:c++17 /Iinclude examples\native\cpp-textkit\textkit.cpp /link /OUT:%TEMP%\textkit.dll
+          cl /nologo /LD /O2 /Iinclude examples\native\bench-kernels\benchkit.c /link /OUT:%TEMP%\benchkit.dll

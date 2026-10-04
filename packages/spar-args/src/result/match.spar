@@ -1,0 +1,8 @@
+// What the command line supplied for one argument.
+// `explicit` is false when the values come from defaults.
+export struct ArgMatch {
+    name: str;
+    values: List<str> = [];
+    occurrences: int = 0;
+    explicit: bool = false;
+};

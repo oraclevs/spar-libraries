@@ -1,0 +1,369 @@
+// TCP transport primitives. HTTP request parsing and routing belong in a separate Spar library.
+import nativeTcp;
+
+fn listen(address: str) -> TcpListenerHandle {
+    return nativeTcp.listen(address: address);
+};
+
+fn listenTls(address: str, certPath: str, keyPath: str) -> TcpListenerHandle {
+    return nativeTcp.listenTls(address: address, certPath: certPath, keyPath: keyPath);
+};
+
+fn localAddress(listener: TcpListenerHandle) -> str {
+    return nativeTcp.localAddress(listener: listener);
+};
+
+fn accept(listener: TcpListenerHandle) -> TcpConnectionHandle {
+    return nativeTcp.accept(listener: listener);
+};
+
+fn acceptTimeout(listener: TcpListenerHandle, millis: int) -> TcpConnectionHandle {
+    return nativeTcp.acceptTimeout(listener: listener, millis: millis);
+};
+
+fn peerAddress(connection: TcpConnectionHandle) -> str {
+    return nativeTcp.peerAddress(connection: connection);
+};
+
+fn setReadTimeout(connection: TcpConnectionHandle, millis: int) -> void {
+    nativeTcp.setReadTimeout(connection: connection, millis: millis);
+    return;
+};
+
+fn read(connection: TcpConnectionHandle, maxBytes: int) -> Bytes {
+    return nativeTcp.read(connection: connection, maxBytes: maxBytes);
+};
+
+fn writeBytes(connection: TcpConnectionHandle, data: Bytes) -> void {
+    nativeTcp.writeBytes(connection: connection, data: data);
+    return;
+};
+
+fn writeText(connection: TcpConnectionHandle, text: str) -> void {
+    nativeTcp.writeText(connection: connection, text: text);
+    return;
+};
+
+fn close(connection: TcpConnectionHandle) -> void {
+    nativeTcp.close(connection: connection);
+    return;
+};
+
+fn closeListener(listener: TcpListenerHandle) -> void {
+    nativeTcp.closeListener(listener: listener);
+    return;
+};
+
+fn connect(address: str, timeoutMillis: int) -> TcpConnectionHandle {
+    return nativeTcp.connect(address: address, timeoutMillis: timeoutMillis);
+};
+
+fn connectTls(address: str, serverName: str, caCertPath: str, timeoutMillis: int) -> TcpConnectionHandle {
+    return nativeTcp.connectTls(address: address, serverName: serverName, caCertPath: caCertPath, timeoutMillis: timeoutMillis);
+};
+
+fn connectionLocalAddress(connection: TcpConnectionHandle) -> str {
+    return nativeTcp.connectionLocalAddress(connection: connection);
+};
+
+fn setWriteTimeout(connection: TcpConnectionHandle, millis: int) -> void {
+    nativeTcp.setWriteTimeout(connection: connection, millis: millis);
+    return;
+};
+
+fn setNoDelay(connection: TcpConnectionHandle, enabled: bool) -> void {
+    nativeTcp.setNoDelay(connection: connection, enabled: enabled);
+    return;
+};
+
+fn socketIpv4() -> TcpSocketHandle {
+    return nativeTcp.socketIpv4();
+};
+
+fn socketIpv6() -> TcpSocketHandle {
+    return nativeTcp.socketIpv6();
+};
+
+fn socketSetReuseAddress(handle: TcpSocketHandle, enabled: bool) -> void {
+    nativeTcp.socketSetReuseAddress(handle: handle, enabled: enabled);
+    return;
+};
+
+fn socketSetReusePort(handle: TcpSocketHandle, enabled: bool) -> void {
+    nativeTcp.socketSetReusePort(handle: handle, enabled: enabled);
+    return;
+};
+
+fn socketSetIpv6Only(handle: TcpSocketHandle, enabled: bool) -> void {
+    nativeTcp.socketSetIpv6Only(handle: handle, enabled: enabled);
+    return;
+};
+
+fn socketSetReceiveBufferSize(handle: TcpSocketHandle, size: int) -> void {
+    nativeTcp.socketSetReceiveBufferSize(handle: handle, size: size);
+    return;
+};
+
+fn socketSetSendBufferSize(handle: TcpSocketHandle, size: int) -> void {
+    nativeTcp.socketSetSendBufferSize(handle: handle, size: size);
+    return;
+};
+
+fn socketBind(handle: TcpSocketHandle, address: str) -> void {
+    nativeTcp.socketBind(handle: handle, address: address);
+    return;
+};
+
+fn socketListen(handle: TcpSocketHandle, backlog: int) -> TcpListenerHandle {
+    return nativeTcp.socketListen(handle: handle, backlog: backlog);
+};
+
+fn socketConnect(handle: TcpSocketHandle, address: str, timeoutMillis: int) -> TcpConnectionHandle {
+    return nativeTcp.socketConnect(handle: handle, address: address, timeoutMillis: timeoutMillis);
+};
+
+fn readExact(connection: TcpConnectionHandle, count: int) -> Bytes {
+    return nativeTcp.readExact(connection: connection, count: count);
+};
+
+fn writePartial(connection: TcpConnectionHandle, data: Bytes) -> int {
+    return nativeTcp.writePartial(connection: connection, data: data);
+};
+
+fn peek(connection: TcpConnectionHandle, maxBytes: int) -> Bytes {
+    return nativeTcp.peek(connection: connection, maxBytes: maxBytes);
+};
+
+fn shutdownRead(connection: TcpConnectionHandle) -> void {
+    nativeTcp.shutdownRead(connection: connection);
+    return;
+};
+
+fn shutdownWrite(connection: TcpConnectionHandle) -> void {
+    nativeTcp.shutdownWrite(connection: connection);
+    return;
+};
+
+fn noDelay(connection: TcpConnectionHandle) -> bool {
+    return nativeTcp.noDelay(connection: connection);
+};
+
+fn setKeepAlive(connection: TcpConnectionHandle, enabled: bool) -> void {
+    nativeTcp.setKeepAlive(connection: connection, enabled: enabled);
+    return;
+};
+
+fn setKeepAliveTiming(connection: TcpConnectionHandle, idleSeconds: int, intervalSeconds: int) -> void {
+    nativeTcp.setKeepAliveTiming(connection: connection, idleSeconds: idleSeconds, intervalSeconds: intervalSeconds);
+    return;
+};
+
+fn setReceiveBufferSize(connection: TcpConnectionHandle, size: int) -> void {
+    nativeTcp.setReceiveBufferSize(connection: connection, size: size);
+    return;
+};
+
+fn setSendBufferSize(connection: TcpConnectionHandle, size: int) -> void {
+    nativeTcp.setSendBufferSize(connection: connection, size: size);
+    return;
+};
+
+fn pendingError(connection: TcpConnectionHandle) -> str {
+    return nativeTcp.pendingError(connection: connection);
+};
+
+fn addressIp(address: str) -> str {
+    return nativeTcp.addressIp(address: address);
+};
+
+fn addressPort(address: str) -> int {
+    return nativeTcp.addressPort(address: address);
+};
+
+fn addressIsIpv6(address: str) -> bool {
+    return nativeTcp.addressIsIpv6(address: address);
+};
+
+fn resolveFirst(host: str, port: int) -> str {
+    return nativeTcp.resolveFirst(host: host, port: port);
+};
+
+// A byte-stream read can return fewer than maxBytes. An empty result is EOF.
+fn readSome(connection: TcpConnectionHandle, maxBytes: int) -> Bytes {
+    return read(connection: connection, maxBytes: maxBytes);
+};
+
+// writeBytes remains for compatibility; both operations complete the entire buffer.
+fn writeAll(connection: TcpConnectionHandle, data: Bytes) -> void {
+    writeBytes(connection: connection, data: data);
+    return;
+};
+
+struct SocketAddress {
+    ip: str;
+    port: int;
+};
+
+fn parseSocketAddress(value: str) -> SocketAddress {
+    return SocketAddress(ip: addressIp(address: value), port: addressPort(address: value));
+};
+
+fn formatSocketAddress(value: SocketAddress) -> str {
+    if value.ip.indexOf(needle: ":").isSome() {
+        return "[${value.ip}]:${value.port}";
+    }
+    return "${value.ip}:${value.port}";
+};
+
+fn resolveAddress(host: str, port: int) -> SocketAddress {
+    return parseSocketAddress(value: resolveFirst(host: host, port: port));
+};
+
+fn connectAddress(address: SocketAddress, timeoutMillis: int) -> TcpConnectionHandle {
+    return connect(address: formatSocketAddress(value: address), timeoutMillis: timeoutMillis);
+};
+
+fn newBuffer(size: int) -> Buffer {
+    return nativeTcp.newBuffer(size: size);
+};
+
+fn readInto(connection: TcpConnectionHandle, buffer: Buffer) -> int {
+    return nativeTcp.readInto(connection: connection, buffer: buffer);
+};
+
+fn bufferPrefix(buffer: Buffer, count: int) -> Bytes {
+    return nativeTcp.bufferPrefix(buffer: buffer, count: count);
+};
+
+fn writeBuffer(connection: TcpConnectionHandle, buffer: Buffer, count: int) -> void {
+    nativeTcp.writeBuffer(connection: connection, buffer: buffer, count: count);
+    return;
+};
+
+fn resolveAll(host: str, port: int) -> DnsResultHandle {
+    return nativeTcp.resolveAll(host: host, port: port);
+};
+
+fn resolvedCount(result: DnsResultHandle) -> int {
+    return nativeTcp.resolvedCount(result: result);
+};
+
+fn resolvedAddress(result: DnsResultHandle, index: int) -> str {
+    return nativeTcp.resolvedAddress(result: result, index: index);
+};
+
+fn resolveAddresses(host: str, port: int) -> [SocketAddress] {
+    var result = resolveAll(host: host, port: port);
+    var mut addresses: [SocketAddress] = [];
+    var mut index: int = 0;
+    while index < resolvedCount(result: result) {
+        addresses.append(value: parseSocketAddress(value: resolvedAddress(result: result, index: index)));
+        index = index + 1;
+    }
+    return addresses;
+};
+
+fn setLinger(connection: TcpConnectionHandle, millis: int) -> void {
+    nativeTcp.setLinger(connection: connection, millis: millis);
+    return;
+};
+
+fn abortConnection(connection: TcpConnectionHandle) -> void {
+    nativeTcp.abortConnection(connection: connection);
+    return;
+};
+
+fn receiveBufferSize(connection: TcpConnectionHandle) -> int {
+    return nativeTcp.receiveBufferSize(connection: connection);
+};
+
+fn sendBufferSize(connection: TcpConnectionHandle) -> int {
+    return nativeTcp.sendBufferSize(connection: connection);
+};
+
+fn sendFile(connection: TcpConnectionHandle, path: str) -> int {
+    return nativeTcp.sendFile(connection: connection, path: path);
+};
+
+fn supportsReusePort() -> bool {
+    return nativeTcp.supportsReusePort();
+};
+
+fn splitReader(connection: TcpConnectionHandle) -> TcpReadHalfHandle {
+    return nativeTcp.splitReader(connection: connection);
+};
+
+fn splitWriter(connection: TcpConnectionHandle) -> TcpWriteHalfHandle {
+    return nativeTcp.splitWriter(connection: connection);
+};
+
+fn readHalf(reader: TcpReadHalfHandle, maxBytes: int) -> Bytes {
+    return nativeTcp.readHalf(reader: reader, maxBytes: maxBytes);
+};
+
+fn readHalfExact(reader: TcpReadHalfHandle, count: int) -> Bytes {
+    return nativeTcp.readHalfExact(reader: reader, count: count);
+};
+
+fn writeHalfBytes(writer: TcpWriteHalfHandle, data: Bytes) -> void {
+    nativeTcp.writeHalfBytes(writer: writer, data: data);
+    return;
+};
+
+fn writeHalfText(writer: TcpWriteHalfHandle, text: str) -> void {
+    nativeTcp.writeHalfText(writer: writer, text: text);
+    return;
+};
+
+fn closeReadHalf(reader: TcpReadHalfHandle) -> void {
+    nativeTcp.closeReadHalf(reader: reader);
+    return;
+};
+
+fn closeWriteHalf(writer: TcpWriteHalfHandle) -> void {
+    nativeTcp.closeWriteHalf(writer: writer);
+    return;
+};
+
+// Reactor-backed sockets. Call from async functions; one pending read per connection.
+fn listenAsync(address: str) -> AsyncTcpListenerHandle {
+    return nativeTcp.listenAsync(address: address);
+};
+
+fn asyncListenerLocalAddress(listener: AsyncTcpListenerHandle) -> str {
+    return nativeTcp.asyncListenerLocalAddress(listener: listener);
+};
+
+async fn acceptAsync(listener: AsyncTcpListenerHandle) -> AsyncTcpConnectionHandle {
+    var accepted: int = await nativeTcp.asyncAccept(listener: listener);
+    return nativeTcp.asyncTakeAccepted(listener: listener);
+};
+
+fn closeAsyncListener(listener: AsyncTcpListenerHandle) -> void {
+    nativeTcp.closeAsyncListener(listener: listener);
+    return;
+};
+
+async fn connectAsync(address: str, timeoutMillis: int) -> AsyncTcpConnectionHandle {
+    var handle = nativeTcp.newAsyncConnect();
+    var connected: int = await nativeTcp.asyncConnect(handle: handle, address: address, timeoutMillis: timeoutMillis);
+    return nativeTcp.asyncTakeConnected(handle: handle);
+};
+
+async fn readAsync(connection: AsyncTcpConnectionHandle, maxBytes: int) -> Bytes {
+    var count: int = await nativeTcp.asyncRead(connection: connection, maxBytes: maxBytes);
+    return nativeTcp.asyncTakeRead(connection: connection);
+};
+
+async fn writeAllAsync(connection: AsyncTcpConnectionHandle, data: Bytes) -> int {
+    return await nativeTcp.asyncWriteAll(connection: connection, data: data);
+};
+
+fn closeAsync(connection: AsyncTcpConnectionHandle) -> void {
+    nativeTcp.closeAsyncConnection(connection: connection);
+    return;
+};
+
+fn cancelAsyncAccept(listener: AsyncTcpListenerHandle) -> void { nativeTcp.cancelAsyncAccept(listener: listener); return; };
+fn cancelAsyncRead(connection: AsyncTcpConnectionHandle) -> void { nativeTcp.cancelAsyncRead(connection: connection); return; };
+fn cancelAsyncWrite(connection: AsyncTcpConnectionHandle) -> void { nativeTcp.cancelAsyncWrite(connection: connection); return; };

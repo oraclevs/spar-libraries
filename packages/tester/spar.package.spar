@@ -1,0 +1,10 @@
+struct Package {
+    name: str = "tester";
+    version: str = "0.1.0";
+    kind: str = "library";
+    entry: str = "src/lib.spar";
+};
+
+struct Dependencies {
+    args: str = "path:../spar-args";
+};

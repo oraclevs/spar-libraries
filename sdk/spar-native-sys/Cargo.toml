@@ -1,0 +1,8 @@
+[package]
+name = "spar-native-sys"
+version = "0.0.1"
+edition = "2021"
+description = "Raw Spar Native ABI 0 (experimental) definitions"
+license = "MIT"
+
+[dependencies]

@@ -1,0 +1,31 @@
+fn join(left: str, right: str) -> str {
+    return nativePath::join(left: left, right: right);
+};
+
+fn basename(path: str) -> str {
+    return nativePath::basename(path: path);
+};
+
+fn dirname(path: str) -> str {
+    return nativePath::dirname(path: path);
+};
+
+fn extension(path: str) -> str {
+    return nativePath::extension(path: path);
+};
+
+fn normalize(path: str) -> str {
+    return nativePath::normalize(path: path);
+};
+
+fn isAbsolute(path: str) -> bool {
+    return nativePath::isAbsolute(path: path);
+};
+
+fn absolute(path: str) -> str {
+    return nativePath::absolute(path: path);
+};
+
+fn relative(from: str, to: str) -> str {
+    return nativePath::relative(from: from, to: to);
+};

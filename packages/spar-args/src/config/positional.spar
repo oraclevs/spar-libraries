@@ -1,0 +1,16 @@
+import { Choice } from "./choice.spar";
+import { ValueSpec } from "./value_spec.spar";
+
+// An argument identified by its position. A trailing positional (or one with
+// maxValues != 1) takes several words.
+export struct Positional {
+    name: str;
+    help: str = "";
+    longHelp: str = "";
+    valueName: str = "";
+    value: ValueSpec = ValueSpec();
+    required: bool = false;
+    defaultValues: List<str> = [];
+    choices: List<Choice> = [];
+    trailing: bool = false;
+};

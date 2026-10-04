@@ -1,0 +1,985 @@
+{
+  "format_version": 1,
+  "module": "nativeTcp",
+  "types": [
+    "TcpListenerHandle",
+    "TcpConnectionHandle",
+    "TcpSocketHandle",
+    "DnsResultHandle",
+    "TcpReadHalfHandle",
+    "TcpWriteHalfHandle",
+    "AsyncTcpListenerHandle",
+    "AsyncTcpConnectHandle",
+    "AsyncTcpConnectionHandle"
+  ],
+  "functions": [
+    {
+      "name": "listen",
+      "params": [
+        {
+          "name": "address",
+          "ty": "str"
+        }
+      ],
+      "ret": "TcpListenerHandle"
+    },
+    {
+      "name": "listenTls",
+      "params": [
+        {
+          "name": "address",
+          "ty": "str"
+        },
+        {
+          "name": "certPath",
+          "ty": "str"
+        },
+        {
+          "name": "keyPath",
+          "ty": "str"
+        }
+      ],
+      "ret": "TcpListenerHandle"
+    },
+    {
+      "name": "localAddress",
+      "params": [
+        {
+          "name": "listener",
+          "ty": "TcpListenerHandle"
+        }
+      ],
+      "ret": "str"
+    },
+    {
+      "name": "accept",
+      "params": [
+        {
+          "name": "listener",
+          "ty": "TcpListenerHandle"
+        }
+      ],
+      "ret": "TcpConnectionHandle"
+    },
+    {
+      "name": "peerAddress",
+      "params": [
+        {
+          "name": "connection",
+          "ty": "TcpConnectionHandle"
+        }
+      ],
+      "ret": "str"
+    },
+    {
+      "name": "setReadTimeout",
+      "params": [
+        {
+          "name": "connection",
+          "ty": "TcpConnectionHandle"
+        },
+        {
+          "name": "millis",
+          "ty": "int"
+        }
+      ],
+      "ret": "void"
+    },
+    {
+      "name": "read",
+      "params": [
+        {
+          "name": "connection",
+          "ty": "TcpConnectionHandle"
+        },
+        {
+          "name": "maxBytes",
+          "ty": "int"
+        }
+      ],
+      "ret": "Bytes"
+    },
+    {
+      "name": "writeBytes",
+      "params": [
+        {
+          "name": "connection",
+          "ty": "TcpConnectionHandle"
+        },
+        {
+          "name": "data",
+          "ty": "Bytes"
+        }
+      ],
+      "ret": "void"
+    },
+    {
+      "name": "writeText",
+      "params": [
+        {
+          "name": "connection",
+          "ty": "TcpConnectionHandle"
+        },
+        {
+          "name": "text",
+          "ty": "str"
+        }
+      ],
+      "ret": "void"
+    },
+    {
+      "name": "close",
+      "params": [
+        {
+          "name": "connection",
+          "ty": "TcpConnectionHandle"
+        }
+      ],
+      "ret": "void"
+    },
+    {
+      "name": "closeListener",
+      "params": [
+        {
+          "name": "listener",
+          "ty": "TcpListenerHandle"
+        }
+      ],
+      "ret": "void"
+    },
+    {
+      "name": "connect",
+      "params": [
+        {
+          "name": "address",
+          "ty": "str"
+        },
+        {
+          "name": "timeoutMillis",
+          "ty": "int"
+        }
+      ],
+      "ret": "TcpConnectionHandle"
+    },
+    {
+      "name": "connectTls",
+      "params": [
+        {
+          "name": "address",
+          "ty": "str"
+        },
+        {
+          "name": "serverName",
+          "ty": "str"
+        },
+        {
+          "name": "caCertPath",
+          "ty": "str"
+        },
+        {
+          "name": "timeoutMillis",
+          "ty": "int"
+        }
+      ],
+      "ret": "TcpConnectionHandle"
+    },
+    {
+      "name": "connectionLocalAddress",
+      "params": [
+        {
+          "name": "connection",
+          "ty": "TcpConnectionHandle"
+        }
+      ],
+      "ret": "str"
+    },
+    {
+      "name": "setWriteTimeout",
+      "params": [
+        {
+          "name": "connection",
+          "ty": "TcpConnectionHandle"
+        },
+        {
+          "name": "millis",
+          "ty": "int"
+        }
+      ],
+      "ret": "void"
+    },
+    {
+      "name": "setNoDelay",
+      "params": [
+        {
+          "name": "connection",
+          "ty": "TcpConnectionHandle"
+        },
+        {
+          "name": "enabled",
+          "ty": "bool"
+        }
+      ],
+      "ret": "void"
+    },
+    {
+      "name": "acceptTimeout",
+      "params": [
+        {
+          "name": "listener",
+          "ty": "TcpListenerHandle"
+        },
+        {
+          "name": "millis",
+          "ty": "int"
+        }
+      ],
+      "ret": "TcpConnectionHandle"
+    },
+    {
+      "name": "socketIpv4",
+      "params": [],
+      "ret": "TcpSocketHandle"
+    },
+    {
+      "name": "socketIpv6",
+      "params": [],
+      "ret": "TcpSocketHandle"
+    },
+    {
+      "name": "socketSetReuseAddress",
+      "params": [
+        {
+          "name": "handle",
+          "ty": "TcpSocketHandle"
+        },
+        {
+          "name": "enabled",
+          "ty": "bool"
+        }
+      ],
+      "ret": "void"
+    },
+    {
+      "name": "socketSetReusePort",
+      "params": [
+        {
+          "name": "handle",
+          "ty": "TcpSocketHandle"
+        },
+        {
+          "name": "enabled",
+          "ty": "bool"
+        }
+      ],
+      "ret": "void"
+    },
+    {
+      "name": "socketSetIpv6Only",
+      "params": [
+        {
+          "name": "handle",
+          "ty": "TcpSocketHandle"
+        },
+        {
+          "name": "enabled",
+          "ty": "bool"
+        }
+      ],
+      "ret": "void"
+    },
+    {
+      "name": "socketSetReceiveBufferSize",
+      "params": [
+        {
+          "name": "handle",
+          "ty": "TcpSocketHandle"
+        },
+        {
+          "name": "size",
+          "ty": "int"
+        }
+      ],
+      "ret": "void"
+    },
+    {
+      "name": "socketSetSendBufferSize",
+      "params": [
+        {
+          "name": "handle",
+          "ty": "TcpSocketHandle"
+        },
+        {
+          "name": "size",
+          "ty": "int"
+        }
+      ],
+      "ret": "void"
+    },
+    {
+      "name": "socketBind",
+      "params": [
+        {
+          "name": "handle",
+          "ty": "TcpSocketHandle"
+        },
+        {
+          "name": "address",
+          "ty": "str"
+        }
+      ],
+      "ret": "void"
+    },
+    {
+      "name": "socketListen",
+      "params": [
+        {
+          "name": "handle",
+          "ty": "TcpSocketHandle"
+        },
+        {
+          "name": "backlog",
+          "ty": "int"
+        }
+      ],
+      "ret": "TcpListenerHandle"
+    },
+    {
+      "name": "socketConnect",
+      "params": [
+        {
+          "name": "handle",
+          "ty": "TcpSocketHandle"
+        },
+        {
+          "name": "address",
+          "ty": "str"
+        },
+        {
+          "name": "timeoutMillis",
+          "ty": "int"
+        }
+      ],
+      "ret": "TcpConnectionHandle"
+    },
+    {
+      "name": "readExact",
+      "params": [
+        {
+          "name": "connection",
+          "ty": "TcpConnectionHandle"
+        },
+        {
+          "name": "count",
+          "ty": "int"
+        }
+      ],
+      "ret": "Bytes"
+    },
+    {
+      "name": "writePartial",
+      "params": [
+        {
+          "name": "connection",
+          "ty": "TcpConnectionHandle"
+        },
+        {
+          "name": "data",
+          "ty": "Bytes"
+        }
+      ],
+      "ret": "int"
+    },
+    {
+      "name": "peek",
+      "params": [
+        {
+          "name": "connection",
+          "ty": "TcpConnectionHandle"
+        },
+        {
+          "name": "maxBytes",
+          "ty": "int"
+        }
+      ],
+      "ret": "Bytes"
+    },
+    {
+      "name": "shutdownRead",
+      "params": [
+        {
+          "name": "connection",
+          "ty": "TcpConnectionHandle"
+        }
+      ],
+      "ret": "void"
+    },
+    {
+      "name": "shutdownWrite",
+      "params": [
+        {
+          "name": "connection",
+          "ty": "TcpConnectionHandle"
+        }
+      ],
+      "ret": "void"
+    },
+    {
+      "name": "noDelay",
+      "params": [
+        {
+          "name": "connection",
+          "ty": "TcpConnectionHandle"
+        }
+      ],
+      "ret": "bool"
+    },
+    {
+      "name": "setKeepAlive",
+      "params": [
+        {
+          "name": "connection",
+          "ty": "TcpConnectionHandle"
+        },
+        {
+          "name": "enabled",
+          "ty": "bool"
+        }
+      ],
+      "ret": "void"
+    },
+    {
+      "name": "setKeepAliveTiming",
+      "params": [
+        {
+          "name": "connection",
+          "ty": "TcpConnectionHandle"
+        },
+        {
+          "name": "idleSeconds",
+          "ty": "int"
+        },
+        {
+          "name": "intervalSeconds",
+          "ty": "int"
+        }
+      ],
+      "ret": "void"
+    },
+    {
+      "name": "setReceiveBufferSize",
+      "params": [
+        {
+          "name": "connection",
+          "ty": "TcpConnectionHandle"
+        },
+        {
+          "name": "size",
+          "ty": "int"
+        }
+      ],
+      "ret": "void"
+    },
+    {
+      "name": "setSendBufferSize",
+      "params": [
+        {
+          "name": "connection",
+          "ty": "TcpConnectionHandle"
+        },
+        {
+          "name": "size",
+          "ty": "int"
+        }
+      ],
+      "ret": "void"
+    },
+    {
+      "name": "pendingError",
+      "params": [
+        {
+          "name": "connection",
+          "ty": "TcpConnectionHandle"
+        }
+      ],
+      "ret": "str"
+    },
+    {
+      "name": "addressIp",
+      "params": [
+        {
+          "name": "address",
+          "ty": "str"
+        }
+      ],
+      "ret": "str"
+    },
+    {
+      "name": "addressPort",
+      "params": [
+        {
+          "name": "address",
+          "ty": "str"
+        }
+      ],
+      "ret": "int"
+    },
+    {
+      "name": "addressIsIpv6",
+      "params": [
+        {
+          "name": "address",
+          "ty": "str"
+        }
+      ],
+      "ret": "bool"
+    },
+    {
+      "name": "resolveFirst",
+      "params": [
+        {
+          "name": "host",
+          "ty": "str"
+        },
+        {
+          "name": "port",
+          "ty": "int"
+        }
+      ],
+      "ret": "str"
+    },
+    {
+      "name": "newBuffer",
+      "params": [
+        {
+          "name": "size",
+          "ty": "int"
+        }
+      ],
+      "ret": "Buffer"
+    },
+    {
+      "name": "readInto",
+      "params": [
+        {
+          "name": "connection",
+          "ty": "TcpConnectionHandle"
+        },
+        {
+          "name": "buffer",
+          "ty": "Buffer"
+        }
+      ],
+      "ret": "int"
+    },
+    {
+      "name": "bufferPrefix",
+      "params": [
+        {
+          "name": "buffer",
+          "ty": "Buffer"
+        },
+        {
+          "name": "count",
+          "ty": "int"
+        }
+      ],
+      "ret": "Bytes"
+    },
+    {
+      "name": "writeBuffer",
+      "params": [
+        {
+          "name": "connection",
+          "ty": "TcpConnectionHandle"
+        },
+        {
+          "name": "buffer",
+          "ty": "Buffer"
+        },
+        {
+          "name": "count",
+          "ty": "int"
+        }
+      ],
+      "ret": "void"
+    },
+    {
+      "name": "resolveAll",
+      "params": [
+        {
+          "name": "host",
+          "ty": "str"
+        },
+        {
+          "name": "port",
+          "ty": "int"
+        }
+      ],
+      "ret": "DnsResultHandle"
+    },
+    {
+      "name": "resolvedCount",
+      "params": [
+        {
+          "name": "result",
+          "ty": "DnsResultHandle"
+        }
+      ],
+      "ret": "int"
+    },
+    {
+      "name": "resolvedAddress",
+      "params": [
+        {
+          "name": "result",
+          "ty": "DnsResultHandle"
+        },
+        {
+          "name": "index",
+          "ty": "int"
+        }
+      ],
+      "ret": "str"
+    },
+    {
+      "name": "setLinger",
+      "params": [
+        {
+          "name": "connection",
+          "ty": "TcpConnectionHandle"
+        },
+        {
+          "name": "millis",
+          "ty": "int"
+        }
+      ],
+      "ret": "void"
+    },
+    {
+      "name": "abortConnection",
+      "params": [
+        {
+          "name": "connection",
+          "ty": "TcpConnectionHandle"
+        }
+      ],
+      "ret": "void"
+    },
+    {
+      "name": "receiveBufferSize",
+      "params": [
+        {
+          "name": "connection",
+          "ty": "TcpConnectionHandle"
+        }
+      ],
+      "ret": "int"
+    },
+    {
+      "name": "sendBufferSize",
+      "params": [
+        {
+          "name": "connection",
+          "ty": "TcpConnectionHandle"
+        }
+      ],
+      "ret": "int"
+    },
+    {
+      "name": "sendFile",
+      "params": [
+        {
+          "name": "connection",
+          "ty": "TcpConnectionHandle"
+        },
+        {
+          "name": "path",
+          "ty": "str"
+        }
+      ],
+      "ret": "int"
+    },
+    {
+      "name": "supportsReusePort",
+      "params": [],
+      "ret": "bool"
+    },
+    {
+      "name": "splitReader",
+      "params": [
+        {
+          "name": "connection",
+          "ty": "TcpConnectionHandle"
+        }
+      ],
+      "ret": "TcpReadHalfHandle"
+    },
+    {
+      "name": "splitWriter",
+      "params": [
+        {
+          "name": "connection",
+          "ty": "TcpConnectionHandle"
+        }
+      ],
+      "ret": "TcpWriteHalfHandle"
+    },
+    {
+      "name": "readHalf",
+      "params": [
+        {
+          "name": "reader",
+          "ty": "TcpReadHalfHandle"
+        },
+        {
+          "name": "maxBytes",
+          "ty": "int"
+        }
+      ],
+      "ret": "Bytes"
+    },
+    {
+      "name": "readHalfExact",
+      "params": [
+        {
+          "name": "reader",
+          "ty": "TcpReadHalfHandle"
+        },
+        {
+          "name": "count",
+          "ty": "int"
+        }
+      ],
+      "ret": "Bytes"
+    },
+    {
+      "name": "writeHalfBytes",
+      "params": [
+        {
+          "name": "writer",
+          "ty": "TcpWriteHalfHandle"
+        },
+        {
+          "name": "data",
+          "ty": "Bytes"
+        }
+      ],
+      "ret": "void"
+    },
+    {
+      "name": "writeHalfText",
+      "params": [
+        {
+          "name": "writer",
+          "ty": "TcpWriteHalfHandle"
+        },
+        {
+          "name": "text",
+          "ty": "str"
+        }
+      ],
+      "ret": "void"
+    },
+    {
+      "name": "closeReadHalf",
+      "params": [
+        {
+          "name": "reader",
+          "ty": "TcpReadHalfHandle"
+        }
+      ],
+      "ret": "void"
+    },
+    {
+      "name": "closeWriteHalf",
+      "params": [
+        {
+          "name": "writer",
+          "ty": "TcpWriteHalfHandle"
+        }
+      ],
+      "ret": "void"
+    },
+    {
+      "name": "listenAsync",
+      "params": [
+        {
+          "name": "address",
+          "ty": "str"
+        }
+      ],
+      "ret": "AsyncTcpListenerHandle"
+    },
+    {
+      "name": "asyncListenerLocalAddress",
+      "params": [
+        {
+          "name": "listener",
+          "ty": "AsyncTcpListenerHandle"
+        }
+      ],
+      "ret": "str"
+    },
+    {
+      "name": "asyncAccept",
+      "params": [
+        {
+          "name": "listener",
+          "ty": "AsyncTcpListenerHandle"
+        }
+      ],
+      "ret": "Promise<int>"
+    },
+    {
+      "name": "asyncTakeAccepted",
+      "params": [
+        {
+          "name": "listener",
+          "ty": "AsyncTcpListenerHandle"
+        }
+      ],
+      "ret": "AsyncTcpConnectionHandle"
+    },
+    {
+      "name": "closeAsyncListener",
+      "params": [
+        {
+          "name": "listener",
+          "ty": "AsyncTcpListenerHandle"
+        }
+      ],
+      "ret": "void"
+    },
+    {
+      "name": "newAsyncConnect",
+      "params": [],
+      "ret": "AsyncTcpConnectHandle"
+    },
+    {
+      "name": "asyncConnect",
+      "params": [
+        {
+          "name": "handle",
+          "ty": "AsyncTcpConnectHandle"
+        },
+        {
+          "name": "address",
+          "ty": "str"
+        },
+        {
+          "name": "timeoutMillis",
+          "ty": "int"
+        }
+      ],
+      "ret": "Promise<int>"
+    },
+    {
+      "name": "asyncTakeConnected",
+      "params": [
+        {
+          "name": "handle",
+          "ty": "AsyncTcpConnectHandle"
+        }
+      ],
+      "ret": "AsyncTcpConnectionHandle"
+    },
+    {
+      "name": "closeAsyncConnect",
+      "params": [
+        {
+          "name": "handle",
+          "ty": "AsyncTcpConnectHandle"
+        }
+      ],
+      "ret": "void"
+    },
+    {
+      "name": "asyncRead",
+      "params": [
+        {
+          "name": "connection",
+          "ty": "AsyncTcpConnectionHandle"
+        },
+        {
+          "name": "maxBytes",
+          "ty": "int"
+        }
+      ],
+      "ret": "Promise<int>"
+    },
+    {
+      "name": "asyncTakeRead",
+      "params": [
+        {
+          "name": "connection",
+          "ty": "AsyncTcpConnectionHandle"
+        }
+      ],
+      "ret": "Bytes"
+    },
+    {
+      "name": "asyncWriteAll",
+      "params": [
+        {
+          "name": "connection",
+          "ty": "AsyncTcpConnectionHandle"
+        },
+        {
+          "name": "data",
+          "ty": "Bytes"
+        }
+      ],
+      "ret": "Promise<int>"
+    },
+    {
+      "name": "closeAsyncConnection",
+      "params": [
+        {
+          "name": "connection",
+          "ty": "AsyncTcpConnectionHandle"
+        }
+      ],
+      "ret": "void"
+    },
+    {
+      "name": "cancelAsyncAccept",
+      "params": [
+        {
+          "name": "listener",
+          "ty": "AsyncTcpListenerHandle"
+        }
+      ],
+      "ret": "void"
+    },
+    {
+      "name": "cancelAsyncConnect",
+      "params": [
+        {
+          "name": "handle",
+          "ty": "AsyncTcpConnectHandle"
+        }
+      ],
+      "ret": "void"
+    },
+    {
+      "name": "cancelAsyncRead",
+      "params": [
+        {
+          "name": "connection",
+          "ty": "AsyncTcpConnectionHandle"
+        }
+      ],
+      "ret": "void"
+    },
+    {
+      "name": "cancelAsyncWrite",
+      "params": [
+        {
+          "name": "connection",
+          "ty": "AsyncTcpConnectionHandle"
+        }
+      ],
+      "ret": "void"
+    }
+  ]
+}

@@ -1,0 +1,28 @@
+import { SuiteResult } from "./suite_result.spar";
+
+export struct RunResult {
+    suites: List<SuiteResult> = [];
+    total: int = 0;
+    passed: int = 0;
+    failed: int = 0;
+    skipped: int = 0;
+    // Failures that happened outside any test (hooks).
+    hookFailures: int = 0;
+    duration: int = 0;
+};
+
+fn addSuiteResult(run: RunResult, suite: SuiteResult) -> RunResult {
+    var mut next: RunResult = run;
+    next.suites.append(value: suite);
+    next.passed = next.passed + suite.passed;
+    next.failed = next.failed + suite.failed;
+    next.skipped = next.skipped + suite.skipped;
+    next.total = next.total + suite.passed + suite.failed + suite.skipped;
+    next.hookFailures = next.hookFailures + suite.hookFailures.length();
+    return next;
+};
+
+// A run succeeds when no test failed and no hook failed.
+fn isSuccess(run: RunResult) -> bool {
+    return run.failed == 0 && run.hookFailures == 0;
+};

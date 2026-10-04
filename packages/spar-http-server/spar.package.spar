@@ -1,0 +1,10 @@
+struct Package {
+    name: str = "http-server";
+    version: str = "0.1.0";
+    kind: str = "library";
+    entry: str = "src/lib.spar";
+};
+
+struct Dependencies {
+    tcp: str = "path:../spar-tcp";
+};

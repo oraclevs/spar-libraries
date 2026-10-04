@@ -1,0 +1,23 @@
+export enum FlagAction {
+    SetTrue,
+    SetFalse,
+    Count
+};
+
+// A switch without a value: `--verbose`, `-v`, `-vvv`.
+// SetTrue reads false when absent, SetFalse reads true when absent, and
+// Count counts occurrences.
+export struct Flag {
+    name: str;
+    short: str = "";
+    long: str = "";
+    aliases: List<str> = [];
+    help: str = "";
+    longHelp: str = "";
+    action: FlagAction = FlagAction::SetTrue;
+    requires: List<str> = [];
+    conflictsWith: List<str> = [];
+    hidden: bool = false;
+    global: bool = false;
+    deprecated: str = "";
+};

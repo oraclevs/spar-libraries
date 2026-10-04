@@ -1,0 +1,115 @@
+// JSON API with groups, auth middleware, CORS, logging and error handling.
+//   tools/bridge.sh --port 8080 examples/api.spar -- --verbose
+import pkg { args } from "std/process";
+import pkg { println } from "std/io";
+import { Context, jsonBody } from "../src/http/context.spar";
+import { Response } from "../src/http/response.spar";
+import { WebError, notFound, unauthorized } from "../src/error/web_error.spar";
+import { Middleware, middleware } from "../src/middleware/middleware.spar";
+import { CorsConfig, cors } from "../src/middleware/cors.spar";
+import { requestLogger, stderrLogger } from "../src/middleware/request_log.spar";
+import { Route, RouteGroup } from "../src/routing/route.spar";
+import { App, AppConfig, Server } from "../src/app/app.spar";
+import { serveStdio } from "../src/transport/stdio.spar";
+
+struct User {
+    id: int = 0;
+    name: str = "";
+};
+
+struct NewUser {
+    name: str = "";
+    age: int = 0;
+};
+
+fn allUsers() -> List<User> {
+    return [User(id: 1, name: "Obi"), User(id: 2, name: "Ada")];
+};
+
+fn home(ctx: Context) -> Response {
+    return Response.text(value: "Hello from SPAR");
+};
+
+fn listUsers(ctx: Context) -> Response {
+    return Response.json(value: allUsers());
+};
+
+fn getUser(ctx: Context) -> Response {
+    var id: int = ctx.paramInt(name: "id", default: -1);
+    for user in allUsers() {
+        if user.id == id {
+            return Response.json(value: user);
+        }
+    }
+    return Response.fail(error: notFound(message: "User " + ctx.param(name: "id") + " not found"));
+};
+
+fn createUser(ctx: Context) -> Response {
+    var parsed: Result<NewUser, WebError> = jsonBody<NewUser>(ctx: ctx);
+    if parsed.isErr() {
+        return Response.fail(error: parsed.unwrapErr());
+    }
+    var body: NewUser = parsed.unwrap();
+    return Response.json(value: User(id: 3, name: body.name), status: 201);
+};
+
+fn search(ctx: Context) -> Response {
+    return Response.text(value: "q=" + ctx.query(name: "q") + " page=" + ctx.queryInt(name: "page", default: 1).toString() + " tags=" + ctx.queryAll(name: "tag").length().toString());
+};
+
+fn boom(ctx: Context) -> Response {
+    var zero: int = 0;
+    return Response.text(value: (1 / zero).toString());
+};
+
+fn secret(ctx: Context) -> Response {
+    return Response.text(value: "secret for " + ctx.local(name: "user"));
+};
+
+fn poweredBy() -> Middleware {
+    return middleware(name: "powered-by", run: fn(ctx: Context, next: fn(Context) -> Response) -> Response {
+        return next(arg0: ctx).withHeader(name: "x-powered-by", value: "spar-web");
+    });
+};
+
+fn auth() -> Middleware {
+    return middleware(name: "auth", run: fn(ctx: Context, next: fn(Context) -> Response) -> Response {
+        if ctx.header(name: "x-token") != "letmein" {
+            return Response.fail(error: unauthorized());
+        }
+        return next(arg0: ctx.withLocal(name: "user", value: "admin"));
+    });
+};
+
+fn main() -> int {
+    var verbose: bool = args().contains(value: "--verbose");
+    var mut layers: List<Middleware> = [poweredBy(), cors(config: CorsConfig(allowedOrigins: ["https://app.example.com"], allowedHeaders: ["content-type"], allowCredentials: true))];
+    if verbose {
+        layers.insert(index: 0, value: requestLogger(logger: stderrLogger()));
+    }
+    var app: App = App(
+        routes: [
+            Route.get(path: "/", handler: home),
+            Route.get(path: "/search", handler: search),
+            Route.get(path: "/boom", handler: boom)
+        ],
+        groups: [
+            RouteGroup(prefix: "/api", groups: [
+                RouteGroup(prefix: "/v1", routes: [
+                    Route.get(path: "/users", handler: listUsers),
+                    Route.post(path: "/users", handler: createUser),
+                    Route.get(path: "/users/:id", handler: getUser)
+                ], groups: [
+                    RouteGroup(prefix: "/admin", middleware: [auth()], routes: [Route.get(path: "/secret", handler: secret)])
+                ])
+            ])
+        ],
+        middleware: layers,
+    );
+    var compiled: Result<Server, WebError> = app.compile();
+    if compiled.isErr() {
+        println(value: compiled.unwrapErr().message);
+        return 1;
+    }
+    return serveStdio(server: compiled.unwrap());
+};

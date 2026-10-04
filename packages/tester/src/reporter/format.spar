@@ -1,0 +1,115 @@
+import { Value, AssertedKind } from "../result/value.spar";
+import { Failure } from "../result/failure.spar";
+
+// Turning typed data into text. Only reporters should need this module.
+fn quote(text: str) -> str {
+    var mark: str = "\"";
+    return mark + text + mark;
+};
+
+fn repeatText(text: str, count: int) -> str {
+    var mut out: str = "";
+    var mut i: int = 0;
+    while i < count {
+        out = out + text;
+        i = i + 1;
+    }
+    return out;
+};
+
+fn renderInts(items: List<int>) -> str {
+    var mut parts: List<str> = [];
+    for item in items {
+        parts.append(value: "${item}");
+    }
+    return "[" + parts.join(separator: ", ") + "]";
+};
+
+fn renderFloats(items: List<float>) -> str {
+    var mut parts: List<str> = [];
+    for item in items {
+        parts.append(value: "${item}");
+    }
+    return "[" + parts.join(separator: ", ") + "]";
+};
+
+fn renderBools(items: List<bool>) -> str {
+    var mut parts: List<str> = [];
+    for item in items {
+        parts.append(value: "${item}");
+    }
+    return "[" + parts.join(separator: ", ") + "]";
+};
+
+fn renderStrs(items: List<str>) -> str {
+    var mut parts: List<str> = [];
+    for item in items {
+        parts.append(value: quote(text: item));
+    }
+    return "[" + parts.join(separator: ", ") + "]";
+};
+
+fn renderValue(value: Value) -> str {
+    if value.kind == AssertedKind::Int {
+        return "${value.intVal}";
+    } else if value.kind == AssertedKind::Float {
+        return "${value.floatVal}";
+    } else if value.kind == AssertedKind::Bool {
+        return "${value.boolVal}";
+    } else if value.kind == AssertedKind::Str {
+        return quote(text: value.strVal);
+    } else if value.kind == AssertedKind::IntList {
+        return renderInts(items: value.ints);
+    } else if value.kind == AssertedKind::FloatList {
+        return renderFloats(items: value.floats);
+    } else if value.kind == AssertedKind::BoolList {
+        return renderBools(items: value.bools);
+    } else if value.kind == AssertedKind::StrList {
+        return renderStrs(items: value.strs);
+    }
+    return "";
+};
+
+// How the "expected" side reads for each assertion.
+fn expectedHeading(assertion: str) -> str {
+    if assertion == "assertNotEqual" || assertion == "assertNotEqualStr" || assertion == "assertNotEqualBool" {
+        return "Expected anything but:";
+    } else if assertion == "assertGreater" || assertion == "assertGreaterFloat" {
+        return "Expected greater than:";
+    } else if assertion == "assertGreaterOrEqual" || assertion == "assertGreaterOrEqualFloat" {
+        return "Expected greater than or equal to:";
+    } else if assertion == "assertLess" || assertion == "assertLessFloat" {
+        return "Expected less than:";
+    } else if assertion == "assertLessOrEqual" || assertion == "assertLessOrEqualFloat" {
+        return "Expected less than or equal to:";
+    } else if assertion == "assertContains" || assertion == "assertContainsStr" || assertion == "assertStringContains" {
+        return "Expected to contain:";
+    } else if assertion == "assertNotContains" || assertion == "assertNotContainsStr" {
+        return "Expected not to contain:";
+    } else if assertion == "assertStartsWith" {
+        return "Expected to start with:";
+    } else if assertion == "assertEndsWith" {
+        return "Expected to end with:";
+    } else if assertion == "assertLength" {
+        return "Expected length:";
+    }
+    return "Expected:";
+};
+
+// Multi-line description of one failure.
+fn renderFailure(failure: Failure) -> str {
+    var mut out: str = "FAIL: " + failure.testName;
+    if failure.message.length() > 0 {
+        out = out + "\n  " + failure.message;
+    }
+    if failure.expected.kind != AssertedKind::Unset {
+        out = out + "\n\n" + expectedHeading(assertion: failure.assertion) + "\n  " + renderValue(value: failure.expected);
+    }
+    if failure.actual.kind != AssertedKind::Unset {
+        out = out + "\n\nReceived:\n  " + renderValue(value: failure.actual);
+    }
+    if failure.expected.kind == AssertedKind::Unset && failure.actual.kind == AssertedKind::Unset {
+        out = out + "\n\n(" + failure.assertion + ")";
+    }
+    return out;
+};

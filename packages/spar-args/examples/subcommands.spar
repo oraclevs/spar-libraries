@@ -1,0 +1,148 @@
+// A CLI with nested subcommands:
+//
+//   spa [-v...] [-c FILE] <command>
+//   spa package add <NAME> [--rev REV] [--dev]
+//   spa package remove <NAME>...
+//   spa package registry add <URL>
+//   spa run [TASK] [-- ARGS...]
+//
+// Try it:  spar examples/subcommands.spar package add serde --rev 1.0 -vv
+//          spar examples/subcommands.spar --help
+//          spar examples/subcommands.spar package --help
+import { Cli } from "../src/config/cli.spar";
+import { SubCommand } from "../src/config/command.spar";
+import { ArgOption } from "../src/config/option.spar";
+import { Flag, FlagAction } from "../src/config/flag.spar";
+import { Positional } from "../src/config/positional.spar";
+import { ValueSpec, ValueCollection } from "../src/config/value_spec.spar";
+import { Matches } from "../src/result/matches.spar";
+import { parseOrExit } from "../src/parser/parser.spar";
+
+fn buildCli() -> Cli {
+    return Cli(
+        name: "spa",
+        version: "0.1.0",
+        about: "A small package tool",
+        flags: [
+            Flag(
+                name: "verbose",
+                short: "v",
+                long: "verbose",
+                action: FlagAction::Count,
+                global: true,
+                help: "Print more output (repeat for more)",
+            )
+        ],
+        options: [
+            ArgOption(
+                name: "config",
+                short: "c",
+                long: "config",
+                valueName: "FILE",
+                global: true,
+                help: "Use this config file",
+            )
+        ],
+        commands: [
+            SubCommand(
+                name: "package",
+                aliases: ["pkg"],
+                about: "Manage packages",
+            ),
+            SubCommand(
+                name: "add",
+                path: ["package"],
+                about: "Add a package",
+                positionals: [
+                    Positional(
+                        name: "name",
+                        required: true,
+                        help: "Package name",
+                    )
+                ],
+                options: [
+                    ArgOption(
+                        name: "rev",
+                        long: "rev",
+                        valueName: "REV",
+                        defaultValues: ["latest"],
+                        help: "Version to install",
+                    )
+                ],
+                flags: [
+                    Flag(
+                        name: "dev",
+                        long: "dev",
+                        help: "Add as a development dependency",
+                    )
+                ],
+            ),
+            SubCommand(
+                name: "remove",
+                path: ["package"],
+                aliases: ["rm"],
+                about: "Remove packages",
+                positionals: [
+                    Positional(
+                        name: "names",
+                        required: true,
+                        value: ValueSpec(
+                            maxValues: 0,
+                            collection: ValueCollection::List,
+                        ),
+                        help: "Packages to remove",
+                    )
+                ],
+            ),
+            SubCommand(
+                name: "registry",
+                path: ["package"],
+                about: "Manage registries",
+            ),
+            SubCommand(
+                name: "add",
+                path: ["package", "registry"],
+                about: "Add a registry",
+                positionals: [
+                    Positional(
+                        name: "url",
+                        required: true,
+                        help: "Registry URL",
+                    )
+                ],
+            ),
+            SubCommand(
+                name: "run",
+                about: "Run a task",
+                positionals: [
+                    Positional(name: "task", help: "Task name"),
+                    Positional(
+                        name: "rest",
+                        trailing: true,
+                        help: "Arguments passed to the task",
+                    )
+                ],
+            )
+        ],
+    );
+};
+
+fn main() -> int {
+    var matches: Matches = parseOrExit(cli: buildCli());
+    var verbosity: int = matches.count(name: "verbose");
+    var path: List<str> = matches.commandPath();
+    var joined: str = path.join(separator: " ");
+    println(value: "command: ${joined}");
+    println(value: "verbosity: ${verbosity}");
+    var config: str = matches
+        .getStr(name: "config")
+        .unwrapOr(fallback: "(none)");
+    println(value: "config: ${config}");
+    if matches.has(name: "name") {
+        var name: str = matches.getStr(name: "name").unwrap();
+        var rev: str = matches.getStr(name: "rev").unwrap();
+        var dev: bool = matches.flag(name: "dev");
+        println(value: "name: ${name}  rev: ${rev}  dev: ${dev}");
+    }
+    return 0;
+};

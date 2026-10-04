@@ -1,0 +1,21 @@
+// spar-args: a command line argument parser for Spar.
+//
+// Spar has no re-exports, so import what you need from its own file:
+//
+//   config/cli.spar        Cli                      the root definition
+//   config/command.spar    SubCommand               a flat list; nesting is `path`
+//   config/option.spar     ArgOption                takes a value
+//   config/flag.spar       Flag, FlagAction         switch, negated switch or counter
+//   config/positional.spar Positional
+//   config/choice.spar     Choice                   allowed values and their aliases
+//   config/group.spar      ArgGroup                 at-least / at-most rules
+//   config/value_spec.spar ValueSpec, ValueKind, ValueCollection
+//   config/help.spar       HelpConfig
+//   config/settings.spar   CliSettings
+//   parser/parser.spar     parse, parseProgramArgs, parseOrExit
+//   result/matches.spar    Matches                  typed getters
+//   result/parse_error.spar ParseError, ParseErrorKind
+//   help/renderer.spar     renderHelp
+//   help/usage.spar        renderUsage
+//
+// See examples/ for complete programs.

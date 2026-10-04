@@ -1,0 +1,56 @@
+// Opaque child-process handle. Values are created only by spawn(); user-created
+// empty Process objects are rejected by the native provider as invalid handles.
+export struct Process {};
+
+// Command, ProcessChunk, and ProcessStream are compiler-known runtime types,
+// like ProcessResult and PipelineStatus. Their behavior still lives in
+// nativeProcess/spar-process; this module only exposes construction/execution
+// functions.
+
+fn args() -> [str] {
+    return nativeProcess::args();
+};
+
+fn which(program: str) -> str {
+    return nativeProcess::which(program: program);
+};
+
+fn command(program: str, args: [str]) -> Command {
+    return nativeProcess::command(program: program, args: args);
+};
+
+fn run(program: str, args: [str]) -> ProcessResult {
+    return nativeProcess::run(program: program, args: args);
+};
+
+fn stream(program: str, args: [str]) -> ProcessStream {
+    return nativeProcess::stream(program: program, args: args);
+};
+
+fn spawn(program: str, args: [str]) -> Process {
+    return nativeProcess::spawn(program: program, args: args);
+};
+
+fn pid(process: Process) -> int {
+    return nativeProcess::pid(process: process);
+};
+
+fn wait(process: Process) -> ProcessStatus {
+    return nativeProcess::wait(process: process);
+};
+
+fn kill(process: Process) -> void {
+    nativeProcess::kill(process: process);
+    return;
+};
+
+fn exit(code: int) -> void {
+    nativeProcess::exit(code: code);
+    return;
+};
+
+// Prints `prompt`, then reads one line from stdin (newline stripped).
+// Returns null at end of input.
+fn readLine(prompt: str) -> Option<str> {
+    return nativeProcess::readLine(prompt: prompt);
+};

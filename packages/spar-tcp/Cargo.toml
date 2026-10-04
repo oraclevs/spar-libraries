@@ -1,0 +1,17 @@
+[package]
+name = "rust-tcp"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+spar-native = { path = "../../sdk/spar-native" }
+rustls = { version = "0.23.44", default-features = false, features = ["ring", "std", "tls12"] }
+rustls-pemfile = "2.2.0"
+socket2 = { version = "0.5.10", features = ["all"] }
+tokio = { version = "1.53.1", features = ["rt-multi-thread", "net", "time", "sync", "macros"] }
+
+[workspace]

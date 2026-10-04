@@ -1,0 +1,87 @@
+import { Cli } from "../config/cli.spar";
+import { ArgOption } from "../config/option.spar";
+import { Positional } from "../config/positional.spar";
+import { SubCommand } from "../config/command.spar";
+import { Scope, buildScope, findCommand } from "../internal/arg_spec.spar";
+
+fn upperName(text: str) -> str {
+    return text.upper();
+};
+
+fn optionValueName(option: ArgOption) -> str {
+    if option.valueName != "" {
+        return option.valueName;
+    }
+    return upperName(text: option.name);
+};
+
+fn positionalValueName(positional: Positional) -> str {
+    if positional.valueName != "" {
+        return positional.valueName;
+    }
+    return upperName(text: positional.name);
+};
+
+// <NAME>, [NAME], <NAME>... or [NAME]...
+fn positionalLabel(positional: Positional) -> str {
+    var name: str = positionalValueName(positional: positional);
+    var mut label: str = "[${name}]";
+    if positional.required {
+        label = "<${name}>";
+    }
+    if positional.trailing || positional.value.maxValues != 1 {
+        label = label + "...";
+    }
+    return label;
+};
+
+fn optionSpelling(option: ArgOption) -> str {
+    if option.long != "" {
+        return "--${option.long}";
+    }
+    return "-${option.short}";
+};
+
+// "spa package add": the program name followed by the subcommand path.
+fn commandLine(cli: Cli, path: List<str>) -> str {
+    var mut text: str = cli.name;
+    for part in path {
+        text = text + " " + part;
+    }
+    return text;
+};
+
+fn renderUsage(cli: Cli, path: List<str>) -> str {
+    var scope: Scope = buildScope(cli: cli, path: path);
+    if path.length() == 0 && cli.help.usage != "" {
+        return "Usage: ${cli.help.usage}";
+    }
+    var mut line: str = "Usage: " + commandLine(cli: cli, path: path);
+    var mut hasOptions: bool = cli.help.enabled && cli.settings.autoHelp;
+    if scope.options.length() > 0 || scope.flags.length() > 0 {
+        hasOptions = true;
+    }
+    if hasOptions {
+        line = line + " [OPTIONS]";
+    }
+    for option in scope.options {
+        if option.required {
+            var spelling: str = optionSpelling(option: option);
+            var valueName: str = optionValueName(option: option);
+            line = line + " ${spelling} <${valueName}>";
+        }
+    }
+    for positional in scope.positionals {
+        line = line + " " + positionalLabel(positional: positional);
+    }
+    var mut visibleChildren: int = 0;
+    for child in scope.children {
+        if !child.hidden {
+            visibleChildren = visibleChildren + 1;
+        }
+    }
+    if visibleChildren > 0 {
+        line = line + " [COMMAND]";
+    }
+    return line;
+};

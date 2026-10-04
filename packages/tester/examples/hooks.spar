@@ -1,0 +1,37 @@
+import { Test } from "../src/core/test.spar";
+import { TestSuite } from "../src/core/suite.spar";
+import { assertEqual } from "../src/assertions/equality.spar";
+import { runMain } from "../src/cli/runner.spar";
+
+// Hooks are plain functions. Spar has no closures over locals, so shared
+// fixtures live at module scope.
+var mut counter: int = 0;
+
+fn setUpAll() -> void { println(value: "  [beforeAll]"); };
+fn tearDownAll() -> void { println(value: "  [afterAll]"); };
+fn setUp() -> void { counter = 10; };
+fn tearDown() -> void { println(value: "  [afterEach] counter=${counter}"); };
+
+fn incrementOnce() -> void {
+    counter = counter + 1;
+    assertEqual(actual: counter, expected: 11);
+};
+
+fn startsFresh() -> void {
+    assertEqual(actual: counter, expected: 10, message: "beforeEach resets the counter");
+};
+
+fn main() -> int {
+    var suite: TestSuite = TestSuite(
+        name: "Counter",
+        tests: [
+            Test(name: "increments once", run: incrementOnce),
+            Test(name: "starts fresh", run: startsFresh)
+        ],
+        beforeAll: setUpAll,
+        afterAll: tearDownAll,
+        beforeEach: setUp,
+        afterEach: tearDown,
+    );
+    return runMain(suites: [suite]);
+};

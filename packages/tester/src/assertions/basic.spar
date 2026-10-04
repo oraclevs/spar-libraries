@@ -1,0 +1,45 @@
+import { Failure } from "../result/failure.spar";
+import { boolValue } from "../result/value.spar";
+import { failNow } from "../core/context.spar";
+
+// Fails the test unconditionally.
+fn fail(message: str = "") -> void {
+    failNow(failure: Failure(assertion: "fail", message: message));
+    return;
+};
+
+fn assertThat(condition: bool, message: str = "") -> void {
+    if !condition {
+        failNow(failure: Failure(
+            assertion: "assertThat",
+            message: message,
+            expected: boolValue(value: true),
+            actual: boolValue(value: false),
+        ));
+    }
+    return;
+};
+
+fn assertTrue(actual: bool, message: str = "") -> void {
+    if !actual {
+        failNow(failure: Failure(
+            assertion: "assertTrue",
+            message: message,
+            expected: boolValue(value: true),
+            actual: boolValue(value: actual),
+        ));
+    }
+    return;
+};
+
+fn assertFalse(actual: bool, message: str = "") -> void {
+    if actual {
+        failNow(failure: Failure(
+            assertion: "assertFalse",
+            message: message,
+            expected: boolValue(value: false),
+            actual: boolValue(value: actual),
+        ));
+    }
+    return;
+};

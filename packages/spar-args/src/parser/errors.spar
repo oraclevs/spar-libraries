@@ -1,0 +1,273 @@
+import { Cli } from "../config/cli.spar";
+import { ParseError, ParseErrorKind } from "../result/parse_error.spar";
+import { renderUsage } from "../help/usage.spar";
+import { renderHelp } from "../help/renderer.spar";
+
+fn makeError(
+    cli: Cli,
+    path: List<str>,
+    kind: ParseErrorKind,
+    message: str,
+    argument: str,
+    suggestion: str,
+) -> ParseError {
+    return ParseError(
+        kind: kind,
+        message: message,
+        argument: argument,
+        path: path,
+        suggestion: suggestion,
+        usage: renderUsage(cli: cli, path: path),
+    );
+};
+
+fn unknownArgument(
+    cli: Cli,
+    path: List<str>,
+    spelled: str,
+    suggestion: str,
+) -> ParseError {
+    var message: str = "unexpected argument '${spelled}'";
+    return makeError(
+        cli: cli,
+        path: path,
+        kind: ParseErrorKind::UnknownArgument,
+        message: message,
+        argument: spelled,
+        suggestion: suggestion,
+    );
+};
+
+fn unknownCommand(
+    cli: Cli,
+    path: List<str>,
+    word: str,
+    suggestion: str,
+) -> ParseError {
+    var message: str = "unrecognized subcommand '${word}'";
+    return makeError(
+        cli: cli,
+        path: path,
+        kind: ParseErrorKind::UnknownCommand,
+        message: message,
+        argument: word,
+        suggestion: suggestion,
+    );
+};
+
+fn missingValue(cli: Cli, path: List<str>, spelled: str) -> ParseError {
+    var message: str = "'${spelled}' requires a value but none was supplied";
+    return makeError(
+        cli: cli,
+        path: path,
+        kind: ParseErrorKind::MissingValue,
+        message: message,
+        argument: spelled,
+        suggestion: "",
+    );
+};
+
+fn tooFewValues(
+    cli: Cli,
+    path: List<str>,
+    spelled: str,
+    need: int,
+    got: int,
+) -> ParseError {
+    var message: str = "'${spelled}' requires at least ${need} values but only ${got} were supplied";
+    return makeError(
+        cli: cli,
+        path: path,
+        kind: ParseErrorKind::TooFewValues,
+        message: message,
+        argument: spelled,
+        suggestion: "",
+    );
+};
+
+fn tooManyValues(
+    cli: Cli,
+    path: List<str>,
+    spelled: str,
+    most: int,
+    got: int,
+) -> ParseError {
+    var message: str = "'${spelled}' accepts at most ${most} values but ${got} were supplied";
+    return makeError(
+        cli: cli,
+        path: path,
+        kind: ParseErrorKind::TooManyValues,
+        message: message,
+        argument: spelled,
+        suggestion: "",
+    );
+};
+
+fn unexpectedValue(
+    cli: Cli,
+    path: List<str>,
+    spelled: str,
+    value: str,
+) -> ParseError {
+    var message: str = "'${spelled}' does not take a value, but '${value}' was supplied";
+    return makeError(
+        cli: cli,
+        path: path,
+        kind: ParseErrorKind::UnexpectedValue,
+        message: message,
+        argument: spelled,
+        suggestion: "",
+    );
+};
+
+fn unexpectedPositional(cli: Cli, path: List<str>, word: str) -> ParseError {
+    var message: str = "unexpected argument '${word}'";
+    return makeError(
+        cli: cli,
+        path: path,
+        kind: ParseErrorKind::UnexpectedPositional,
+        message: message,
+        argument: word,
+        suggestion: "",
+    );
+};
+
+fn invalidValue(
+    cli: Cli,
+    path: List<str>,
+    spelled: str,
+    value: str,
+    expected: str,
+) -> ParseError {
+    var message: str = "invalid value '${value}' for '${spelled}': expected ${expected}";
+    return makeError(
+        cli: cli,
+        path: path,
+        kind: ParseErrorKind::InvalidValue,
+        message: message,
+        argument: spelled,
+        suggestion: "",
+    );
+};
+
+fn invalidChoice(
+    cli: Cli,
+    path: List<str>,
+    spelled: str,
+    value: str,
+    allowed: List<str>,
+) -> ParseError {
+    var joined: str = allowed.join(separator: ", ");
+    var message: str = "invalid value '${value}' for '${spelled}' [possible values: ${joined}]";
+    return makeError(
+        cli: cli,
+        path: path,
+        kind: ParseErrorKind::InvalidChoice,
+        message: message,
+        argument: spelled,
+        suggestion: "",
+    );
+};
+
+fn missingRequired(
+    cli: Cli,
+    path: List<str>,
+    labels: List<str>,
+) -> ParseError {
+    var joined: str = labels.join(separator: ", ");
+    var message: str = "the following required arguments were not provided: ${joined}";
+    return makeError(
+        cli: cli,
+        path: path,
+        kind: ParseErrorKind::MissingRequired,
+        message: message,
+        argument: labels[0],
+        suggestion: "",
+    );
+};
+
+fn duplicateArgument(cli: Cli, path: List<str>, spelled: str) -> ParseError {
+    var message: str = "'${spelled}' cannot be used multiple times";
+    return makeError(
+        cli: cli,
+        path: path,
+        kind: ParseErrorKind::DuplicateArgument,
+        message: message,
+        argument: spelled,
+        suggestion: "",
+    );
+};
+
+fn conflict(
+    cli: Cli,
+    path: List<str>,
+    first: str,
+    second: str,
+) -> ParseError {
+    var message: str = "'${first}' cannot be used with '${second}'";
+    return makeError(
+        cli: cli,
+        path: path,
+        kind: ParseErrorKind::ConflictingArguments,
+        message: message,
+        argument: first,
+        suggestion: "",
+    );
+};
+
+fn missingRequirement(
+    cli: Cli,
+    path: List<str>,
+    name: str,
+    needed: str,
+) -> ParseError {
+    var message: str = "'${name}' requires '${needed}' to be provided as well";
+    return makeError(
+        cli: cli,
+        path: path,
+        kind: ParseErrorKind::MissingRequirement,
+        message: message,
+        argument: name,
+        suggestion: "",
+    );
+};
+
+fn groupViolation(
+    cli: Cli,
+    path: List<str>,
+    group: str,
+    detail: str,
+) -> ParseError {
+    var message: str = "argument group '${group}': ${detail}";
+    return makeError(
+        cli: cli,
+        path: path,
+        kind: ParseErrorKind::GroupViolation,
+        message: message,
+        argument: group,
+        suggestion: "",
+    );
+};
+
+fn invalidConfiguration(problems: List<str>) -> ParseError {
+    var joined: str = problems.join(separator: "; ");
+    return ParseError(
+        kind: ParseErrorKind::InvalidConfiguration,
+        message: "invalid CLI definition: ${joined}",
+    );
+};
+
+fn helpRequested(cli: Cli, path: List<str>) -> ParseError {
+    return ParseError(
+        kind: ParseErrorKind::HelpRequested,
+        message: renderHelp(cli: cli, path: path),
+        path: path,
+    );
+};
+
+fn versionRequested(cli: Cli) -> ParseError {
+    return ParseError(
+        kind: ParseErrorKind::VersionRequested,
+        message: "${cli.name} ${cli.version}",
+    );
+};

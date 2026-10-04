@@ -1,0 +1,93 @@
+import pkg { args } from "std/process";
+import pkg { eprintln } from "std/io";
+import pkg { isStdoutTty } from "std/terminal";
+import pkg { Cli } from "args/config/cli";
+import pkg { ArgOption } from "args/config/option";
+import pkg { Flag } from "args/config/flag";
+import pkg { Matches } from "args/result/matches";
+import pkg { ParseError } from "args/result/parse_error";
+import pkg { parse } from "args/parser/parser";
+import { TestSuite } from "../core/suite.spar";
+import { RunOptions } from "../core/options.spar";
+import { runSuites } from "../core/runner.spar";
+import { RunResult, isSuccess } from "../result/run_result.spar";
+import { Reporter } from "../reporter/reporter.spar";
+import { consoleReporter } from "../reporter/console.spar";
+
+// The command line of every spar-test runner, built on the spar-args library.
+fn testCli() -> Cli {
+    return Cli(
+        name: "spar-test",
+        about: "Run Spar tests",
+        options: [
+            ArgOption(
+                name: "filter",
+                short: "f",
+                long: "filter",
+                valueName: "TEXT",
+                help: "Only run suites or tests whose name contains TEXT",
+            )
+        ],
+        flags: [
+            Flag(name: "verbose", short: "v", long: "verbose", help: "Show durations and suite totals"),
+            Flag(name: "quiet", short: "q", long: "quiet", help: "Only print failures and the summary"),
+            Flag(name: "failFast", long: "fail-fast", help: "Stop after the first failing test"),
+            Flag(name: "list", short: "l", long: "list", help: "List tests without running them"),
+            Flag(name: "noColor", long: "no-color", help: "Never use terminal colours")
+        ],
+    );
+};
+
+// Pure translation of parsed arguments into run options.
+fn optionsFromMatches(matches: Matches, colorAvailable: bool) -> RunOptions {
+    var mut filter: str = "";
+    var given: Option<str> = matches.getStr(name: "filter");
+    if given.isSome() {
+        filter = given.unwrap();
+    }
+    return RunOptions(
+        filter: filter,
+        verbose: matches.flag(name: "verbose"),
+        quiet: matches.flag(name: "quiet"),
+        failFast: matches.flag(name: "failFast"),
+        list: matches.flag(name: "list"),
+        color: colorAvailable && !matches.flag(name: "noColor"),
+    );
+};
+
+fn parseOptions(argv: List<str>, colorAvailable: bool) -> Result<RunOptions, ParseError> {
+    var parsed: Result<Matches, ParseError> = parse(cli: testCli(), argv: argv);
+    if !parsed.isOk() {
+        return err<RunOptions, ParseError>(error: parsed.unwrapErr());
+    }
+    return ok<RunOptions, ParseError>(value: optionsFromMatches(
+        matches: parsed.unwrap(),
+        colorAvailable: colorAvailable,
+    ));
+};
+
+// Runs the suites using an explicit argument list and reporter.
+// Returns the process exit status: 0 on success, 1 when a test failed,
+// 2 on a usage error (3 would be reserved), help/version return 0.
+fn runWith(suites: List<TestSuite>, argv: List<str>, reporter: Reporter) -> int {
+    var parsed: Result<RunOptions, ParseError> = parseOptions(argv: argv, colorAvailable: isStdoutTty());
+    if !parsed.isOk() {
+        var error: ParseError = parsed.unwrapErr();
+        if error.isFailure() {
+            eprintln(value: error.render());
+        } else {
+            println(value: error.message);
+        }
+        return error.exitCode();
+    }
+    var run: RunResult = runSuites(suites: suites, options: parsed.unwrap(), reporter: reporter);
+    if isSuccess(run: run) {
+        return 0;
+    }
+    return 1;
+};
+
+// The normal entry point: `fn main() -> int { return runMain(suites: [...]); };`
+fn runMain(suites: List<TestSuite>) -> int {
+    return runWith(suites: suites, argv: args(), reporter: consoleReporter());
+};

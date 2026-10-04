@@ -1,0 +1,11 @@
+export struct HelpConfig {
+    enabled: bool = true;
+    short: str = "h";
+    long: str = "help";
+    beforeHelp: str = "";
+    afterHelp: str = "";
+    usage: str = "";
+    showDefaults: bool = true;
+    showChoices: bool = true;
+    showAliases: bool = true;
+};

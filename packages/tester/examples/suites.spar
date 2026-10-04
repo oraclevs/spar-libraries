@@ -1,0 +1,40 @@
+import { Test } from "../src/core/test.spar";
+import { TestSuite } from "../src/core/suite.spar";
+import { assertEqual, assertEqualStr } from "../src/assertions/equality.spar";
+import { assertGreater } from "../src/assertions/comparison.spar";
+import { assertStringContains, assertStartsWith } from "../src/assertions/strings.spar";
+import { assertContains, assertContainsStr, assertLength } from "../src/assertions/collections.spar";
+import { runMain } from "../src/cli/runner.spar";
+
+fn adds() -> void { assertEqual(actual: 1 + 1, expected: 2); };
+fn bigger() -> void { assertGreater(actual: 10, bound: 3); };
+fn wrongOnPurpose() -> void { assertEqual(actual: 41, expected: 42, message: "off by one"); };
+
+fn upper() -> void { assertEqualStr(actual: "abc".upper(), expected: "ABC"); };
+fn containsWord() -> void { assertStringContains(actual: "hello world", needle: "world"); };
+fn prefix() -> void { assertStartsWith(actual: "hello", prefix: "he"); };
+fn badString() -> void { assertEqualStr(actual: "hello", expected: "world"); };
+
+fn parsesLongOption() -> void { assertContainsStr(items: ["--filter", "--verbose"], item: "--verbose"); };
+fn lengthOk() -> void { assertLength(items: [1, 2, 3], expected: 3); };
+fn rejectsMalformed() -> void { assertContains(items: [1, 2, 3], item: 42); };
+
+fn main() -> int {
+    var math: TestSuite = TestSuite(name: "Math", tests: [
+        Test(name: "adds", run: adds),
+        Test(name: "greater", run: bigger),
+        Test(name: "off by one", run: wrongOnPurpose)
+    ]);
+    var text: TestSuite = TestSuite(name: "String", tests: [
+        Test(name: "upper", run: upper),
+        Test(name: "contains", run: containsWord),
+        Test(name: "starts with", run: prefix),
+        Test(name: "mismatch", run: badString)
+    ]);
+    var parser: TestSuite = TestSuite(name: "Parser", tests: [
+        Test(name: "parses long option", run: parsesLongOption),
+        Test(name: "length", run: lengthOk),
+        Test(name: "rejects malformed integer", run: rejectsMalformed)
+    ]);
+    return runMain(suites: [math, text, parser]);
+};

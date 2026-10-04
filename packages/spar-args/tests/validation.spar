@@ -1,0 +1,207 @@
+import { Cli } from "../src/config/cli.spar";
+import { ArgOption } from "../src/config/option.spar";
+import { Flag } from "../src/config/flag.spar";
+import { Positional } from "../src/config/positional.spar";
+import { ArgGroup } from "../src/config/group.spar";
+import { Matches } from "../src/result/matches.spar";
+import { ParseError, ParseErrorKind } from "../src/result/parse_error.spar";
+import {
+    check,
+    report,
+    good,
+    succeeds,
+    failsWith,
+    errorOf
+} from "./support.spar";
+
+fn required() -> int {
+    var mut failed: int = 0;
+    var cli: Cli = Cli(
+        name: "t",
+        options: [
+            ArgOption(name: "token", long: "token", required: true),
+            ArgOption(
+                name: "user",
+                long: "user",
+                required: true,
+                defaultValues: ["me"],
+            )
+        ],
+    );
+    failed = failed + check(
+        label: "required option missing",
+        condition: failsWith(
+            cli: cli,
+            argv: [],
+            kind: ParseErrorKind::MissingRequired,
+        ),
+    );
+    failed = failed + check(
+        label: "required option given",
+        condition: succeeds(cli: cli, argv: ["--token", "x"]),
+    );
+    failed = failed + check(
+        label: "a default satisfies required",
+        condition: good(cli: cli, argv: ["--token", "x"])
+            .getStr(name: "user")
+            .unwrap() == "me",
+    );
+    var error: ParseError = errorOf(cli: cli, argv: []);
+    failed = failed + check(
+        label: "message names the missing option",
+        condition: error.message.contains(needle: "--token <TOKEN>")
+            && !error.message.contains(needle: "--user"),
+    );
+    return failed;
+};
+
+fn relations() -> int {
+    var mut failed: int = 0;
+    var cli: Cli = Cli(
+        name: "t",
+        flags: [
+            Flag(name: "json", long: "json", conflictsWith: ["yaml"]),
+            Flag(name: "yaml", long: "yaml"),
+            Flag(name: "pretty", long: "pretty", requires: ["json"])
+        ],
+        options: [
+            ArgOption(name: "user", long: "user", requires: ["pass"]),
+            ArgOption(name: "pass", long: "pass")
+        ],
+    );
+    failed = failed + check(
+        label: "conflict detected",
+        condition: failsWith(
+            cli: cli,
+            argv: ["--json", "--yaml"],
+            kind: ParseErrorKind::ConflictingArguments,
+        ),
+    );
+    failed = failed + check(
+        label: "conflict is symmetric when declared one way",
+        condition: failsWith(
+            cli: cli,
+            argv: ["--yaml", "--json"],
+            kind: ParseErrorKind::ConflictingArguments,
+        ),
+    );
+    failed = failed + check(
+        label: "no conflict alone",
+        condition: succeeds(cli: cli, argv: ["--yaml"]),
+    );
+    failed = failed + check(
+        label: "missing requirement (flag)",
+        condition: failsWith(
+            cli: cli,
+            argv: ["--pretty"],
+            kind: ParseErrorKind::MissingRequirement,
+        ),
+    );
+    failed = failed + check(
+        label: "requirement met",
+        condition: succeeds(cli: cli, argv: ["--pretty", "--json"]),
+    );
+    failed = failed + check(
+        label: "missing requirement (option)",
+        condition: failsWith(
+            cli: cli,
+            argv: ["--user", "bob"],
+            kind: ParseErrorKind::MissingRequirement,
+        ),
+    );
+    failed = failed + check(
+        label: "requirement met (option)",
+        condition: succeeds(cli: cli, argv: ["--user", "bob", "--pass", "pw"]),
+    );
+    return failed;
+};
+
+fn groups() -> int {
+    var mut failed: int = 0;
+    var cli: Cli = Cli(
+        name: "t",
+        flags: [
+            Flag(name: "a", long: "a"),
+            Flag(name: "b", long: "b"),
+            Flag(name: "c", long: "c")
+        ],
+        groups: [
+            ArgGroup(
+                name: "mode",
+                members: ["a", "b"],
+                required: true,
+                maxPresent: 1,
+            ),
+            ArgGroup(name: "pair", members: ["b", "c"], minPresent: 2)
+        ],
+    );
+    failed = failed + check(
+        label: "required group with nothing given",
+        condition: failsWith(
+            cli: cli,
+            argv: [],
+            kind: ParseErrorKind::GroupViolation,
+        ),
+    );
+    failed = failed + check(
+        label: "group max exceeded",
+        condition: failsWith(
+            cli: cli,
+            argv: ["--a", "--b", "--c"],
+            kind: ParseErrorKind::GroupViolation,
+        ),
+    );
+    failed = failed + check(
+        label: "group min not reached",
+        condition: failsWith(
+            cli: cli,
+            argv: ["--a"],
+            kind: ParseErrorKind::GroupViolation,
+        ),
+    );
+    failed = failed + check(
+        label: "groups satisfied",
+        condition: succeeds(cli: cli, argv: ["--b", "--c"]),
+    );
+    return failed;
+};
+
+fn deprecations() -> int {
+    var mut failed: int = 0;
+    var cli: Cli = Cli(
+        name: "t",
+        flags: [Flag(name: "old", long: "old", deprecated: "use --new")],
+        options: [
+            ArgOption(
+                name: "legacy",
+                long: "legacy",
+                deprecated: "gone in 2.0",
+            )
+        ],
+    );
+    var m: Matches = good(cli: cli, argv: ["--old", "--legacy", "x"]);
+    failed = failed + check(
+        label: "deprecated arguments still work",
+        condition: m.flag(name: "old")
+            && m.getStr(name: "legacy").unwrap() == "x",
+    );
+    failed = failed + check(
+        label: "and produce a warning each",
+        condition: m.warnings.length() == 2
+            && m.warnings[0].contains(needle: "use --new"),
+    );
+    failed = failed + check(
+        label: "no warning when unused",
+        condition: good(cli: cli, argv: []).warnings.length() == 0,
+    );
+    return failed;
+};
+
+fn main() -> int {
+    var mut bad: int = 0;
+    bad = bad + report(suite: "required arguments", failures: required());
+    bad = bad + report(suite: "requires and conflicts", failures: relations());
+    bad = bad + report(suite: "groups", failures: groups());
+    bad = bad + report(suite: "deprecations", failures: deprecations());
+    return bad;
+};

@@ -1,0 +1,262 @@
+import { Cli } from "../src/config/cli.spar";
+import { SubCommand } from "../src/config/command.spar";
+import { ArgOption } from "../src/config/option.spar";
+import { Flag } from "../src/config/flag.spar";
+import { Positional } from "../src/config/positional.spar";
+import { Choice } from "../src/config/choice.spar";
+import { HelpConfig } from "../src/config/help.spar";
+import { CliSettings } from "../src/config/settings.spar";
+import { ParseError, ParseErrorKind } from "../src/result/parse_error.spar";
+import { renderHelp } from "../src/help/renderer.spar";
+import { renderUsage } from "../src/help/usage.spar";
+import {
+    check,
+    checkEq,
+    report,
+    good,
+    succeeds,
+    failsWith,
+    errorOf
+} from "./support.spar";
+
+fn sample() -> Cli {
+    return Cli(
+        name: "spa",
+        version: "1.2.3",
+        about: "A package tool",
+        flags: [
+            Flag(
+                name: "verbose",
+                short: "v",
+                long: "verbose",
+                help: "Be chatty",
+            ),
+            Flag(
+                name: "secret",
+                long: "secret",
+                hidden: true,
+                help: "Do not show",
+            )
+        ],
+        options: [
+            ArgOption(
+                name: "format",
+                short: "f",
+                long: "format",
+                valueName: "FMT",
+                help: "Output format",
+                defaultValues: ["json"],
+                choices: [Choice(value: "json"), Choice(value: "yaml")],
+            ),
+            ArgOption(
+                name: "token",
+                long: "token",
+                required: true,
+                help: "Access token",
+            )
+        ],
+        positionals: [Positional(name: "target", help: "What to build")],
+        commands: [
+            SubCommand(
+                name: "add",
+                about: "Add a package",
+                aliases: ["a"],
+                positionals: [Positional(name: "name", required: true)],
+            ),
+            SubCommand(name: "hidden", about: "Hidden command", hidden: true)
+        ],
+        help: HelpConfig(beforeHelp: "BEFORE", afterHelp: "AFTER"),
+    );
+};
+
+fn rendering() -> int {
+    var mut failed: int = 0;
+    var cli: Cli = sample();
+    var text: str = renderHelp(cli: cli, path: []);
+    failed = failed + check(
+        label: "about line",
+        condition: text.contains(needle: "A package tool"),
+    );
+    failed = failed + check(
+        label: "before and after text",
+        condition: text.startsWith(prefix: "BEFORE")
+            && text.endsWith(suffix: "AFTER"),
+    );
+    failed = failed + check(
+        label: "usage line",
+        condition: text.contains(
+            needle: "Usage: spa [OPTIONS] --token <TOKEN> [TARGET] [COMMAND]",
+        ),
+    );
+    failed = failed + check(
+        label: "option row with value name and default",
+        condition: text.contains(needle: "-f, --format <FMT>")
+            && text.contains(needle: "[default: json]"),
+    );
+    failed = failed + check(
+        label: "possible values",
+        condition: text.contains(needle: "[possible values: json, yaml]"),
+    );
+    failed = failed + check(
+        label: "flag without a short spelling",
+        condition: text.contains(needle: "-v, --verbose"),
+    );
+    failed = failed + check(
+        label: "builtin help and version rows",
+        condition: text.contains(needle: "-h, --help")
+            && text.contains(needle: "-V, --version"),
+    );
+    failed = failed + check(
+        label: "command rows with aliases",
+        condition: text.contains(needle: "add")
+            && text.contains(needle: "[aliases: a]"),
+    );
+    failed = failed + check(
+        label: "positional section",
+        condition: text.contains(needle: "Arguments:")
+            && text.contains(needle: "What to build"),
+    );
+    failed = failed + check(
+        label: "hidden flag stays hidden",
+        condition: !text.contains(needle: "--secret"),
+    );
+    failed = failed + check(
+        label: "hidden command stays hidden",
+        condition: !text.contains(needle: "Hidden command"),
+    );
+    var sub: str = renderHelp(cli: cli, path: ["add"]);
+    failed = failed + check(
+        label: "subcommand usage",
+        condition: sub.contains(needle: "Usage: spa add [OPTIONS] <NAME>"),
+    );
+    failed = failed + check(
+        label: "subcommand about",
+        condition: sub.startsWith(prefix: "BEFORE\n\nAdd a package"),
+    );
+    failed = failed + check(
+        label: "version row only at the top level",
+        condition: !sub.contains(needle: "--version"),
+    );
+    var plain: Cli = Cli(name: "bare", help: HelpConfig(enabled: false));
+    failed = failed + check(
+        label: "help can be disabled",
+        condition: !renderHelp(cli: plain, path: []).contains(
+            needle: "--help",
+        ),
+    );
+    var custom: Cli = Cli(name: "x", help: HelpConfig(usage: "x <thing>"));
+    failed = failed + checkEq(
+        label: "custom usage text",
+        actual: renderUsage(cli: custom, path: []),
+        expected: "Usage: x <thing>",
+    );
+    return failed;
+};
+
+fn requests() -> int {
+    var mut failed: int = 0;
+    var cli: Cli = sample();
+    var help: ParseError = errorOf(cli: cli, argv: ["--help"]);
+    failed = failed + check(
+        label: "--help is a HelpRequested",
+        condition: help.kind == ParseErrorKind::HelpRequested && help.isHelp(),
+    );
+    failed = failed + check(
+        label: "which is not a failure",
+        condition: !help.isFailure() && help.exitCode() == 0,
+    );
+    failed = failed + check(
+        label: "and carries the help text",
+        condition: help.message.contains(needle: "Usage: spa"),
+    );
+    failed = failed + check(
+        label: "-h works too",
+        condition: failsWith(
+            cli: cli,
+            argv: ["-h"],
+            kind: ParseErrorKind::HelpRequested,
+        ),
+    );
+    failed = failed + check(
+        label: "help wins over missing required options",
+        condition: failsWith(
+            cli: cli,
+            argv: ["--help"],
+            kind: ParseErrorKind::HelpRequested,
+        ),
+    );
+    var subHelp: ParseError = errorOf(cli: cli, argv: ["add", "--help"]);
+    failed = failed + check(
+        label: "subcommand help",
+        condition: subHelp.message.contains(needle: "Usage: spa add"),
+    );
+    var version: ParseError = errorOf(cli: cli, argv: ["--version"]);
+    failed = failed + check(
+        label: "--version",
+        condition: version.isVersion()
+            && version.message == "spa 1.2.3"
+            && version.exitCode() == 0,
+    );
+    failed = failed + check(
+        label: "-V",
+        condition: failsWith(
+            cli: cli,
+            argv: ["-V"],
+            kind: ParseErrorKind::VersionRequested,
+        ),
+    );
+    failed = failed + check(
+        label: "no --version inside a subcommand",
+        condition: failsWith(
+            cli: cli,
+            argv: ["add", "--version"],
+            kind: ParseErrorKind::UnknownArgument,
+        ),
+    );
+    var quiet: Cli = Cli(name: "q", help: HelpConfig(enabled: false));
+    failed = failed + check(
+        label: "disabled help is an unknown argument",
+        condition: failsWith(
+            cli: quiet,
+            argv: ["--help"],
+            kind: ParseErrorKind::UnknownArgument,
+        ),
+    );
+    var noAuto: Cli = Cli(
+        name: "q",
+        version: "1",
+        settings: CliSettings(autoHelp: false, autoVersion: false),
+    );
+    failed = failed + check(
+        label: "autoHelp/autoVersion off",
+        condition: failsWith(
+            cli: noAuto,
+            argv: ["--help"],
+            kind: ParseErrorKind::UnknownArgument,
+        )
+            && failsWith(
+                cli: noAuto,
+                argv: ["--version"],
+                kind: ParseErrorKind::UnknownArgument,
+            ),
+    );
+    var own: Cli = Cli(
+        name: "q",
+        flags: [Flag(name: "help", short: "h", long: "help")],
+    );
+    failed = failed + check(
+        label: "a user-defined --help overrides the builtin",
+        condition: good(cli: own, argv: ["--help"]).flag(name: "help"),
+    );
+    return failed;
+};
+
+fn main() -> int {
+    var mut bad: int = 0;
+    bad = bad + report(suite: "help rendering", failures: rendering());
+    bad = bad + report(
+        suite: "help and version requests",
+        failures: requests(),
+    );
+    return bad;
+};

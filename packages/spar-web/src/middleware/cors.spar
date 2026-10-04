@@ -1,0 +1,111 @@
+import { Context } from "../http/context.spar";
+import { Response } from "../http/response.spar";
+import { methodName } from "../http/request.spar";
+import { join } from "../internal/utils.spar";
+import { Middleware, passThrough } from "./middleware.spar";
+
+// Cross-origin policy. allowedOrigins may be ["*"] (any origin, no
+// credentials) or an explicit list of origins such as "https://app.example.com".
+// "*" together with allowCredentials is rejected by App.compile: browsers
+// refuse it, and echoing every origin back instead would be a hole.
+// Empty allowedHeaders means "allow whatever the preflight asks for".
+export struct CorsConfig {
+    allowedOrigins: List<str> = ["*"];
+    allowedMethods: List<str> = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"];
+    allowedHeaders: List<str> = [];
+    exposedHeaders: List<str> = [];
+    allowCredentials: bool = false;
+    maxAge: int = 600;
+};
+
+fn corsProblem(config: CorsConfig) -> str {
+    if config.allowedOrigins.length() == 0 {
+        return "cors: allowedOrigins is empty";
+    }
+    if config.allowCredentials && config.allowedOrigins.contains(value: "*") {
+        return "cors: allowCredentials cannot be combined with allowedOrigins \"*\"";
+    }
+    return "";
+};
+
+fn originAllowed(config: CorsConfig, origin: str) -> bool {
+    return config.allowedOrigins.contains(value: "*") || config.allowedOrigins.contains(value: origin);
+};
+
+fn withVaryOrigin(response: Response) -> Response {
+    var existing: str = response.header(name: "vary");
+    if existing.isEmpty() {
+        return response.withHeader(name: "vary", value: "Origin");
+    }
+    if existing.contains(needle: "Origin") {
+        return response;
+    }
+    return response.withHeader(name: "vary", value: existing + ", Origin");
+};
+
+fn allowOriginHeader(config: CorsConfig, origin: str) -> str {
+    if config.allowedOrigins.contains(value: "*") {
+        return "*";
+    }
+    return origin;
+};
+
+fn corsHeaders(config: CorsConfig, origin: str, response: Response) -> Response {
+    var mut out: Response = response.withHeader(name: "access-control-allow-origin", value: allowOriginHeader(config: config, origin: origin));
+    if !config.allowedOrigins.contains(value: "*") {
+        out = withVaryOrigin(response: out);
+    }
+    if config.allowCredentials {
+        out = out.withHeader(name: "access-control-allow-credentials", value: "true");
+    }
+    return out;
+};
+
+// Handles simple requests (adds headers to the response) and preflights
+// (OPTIONS + Origin + Access-Control-Request-Method, answered here with 204).
+// Requests without an Origin header are not cross-origin and pass untouched.
+// A disallowed origin gets no CORS headers; its preflight gets 403.
+fn cors(config: CorsConfig) -> Middleware {
+    var problem: str = corsProblem(config: config);
+    if !problem.isEmpty() {
+        return Middleware(name: "cors", run: passThrough, error: problem);
+    }
+    var run = fn(ctx: Context, next: fn(Context) -> Response) -> Response {
+        var origin: str = ctx.header(name: "origin");
+        if origin.isEmpty() {
+            return next(arg0: ctx);
+        }
+        var preflight: bool = methodName(method: ctx.method()) == "OPTIONS" && ctx.hasHeader(name: "access-control-request-method");
+        if !originAllowed(config: config, origin: origin) {
+            if preflight {
+                return withVaryOrigin(response: Response.empty(status: 403));
+            }
+            return withVaryOrigin(response: next(arg0: ctx));
+        }
+        if !preflight {
+            var res: Response = next(arg0: ctx);
+            var mut out: Response = corsHeaders(config: config, origin: origin, response: res);
+            if config.exposedHeaders.length() > 0 {
+                out = out.withHeader(name: "access-control-expose-headers", value: join(values: config.exposedHeaders, separator: ", "));
+            }
+            return out;
+        }
+        var wanted: str = ctx.header(name: "access-control-request-method").toUpperCase();
+        if !config.allowedMethods.contains(value: wanted) {
+            return withVaryOrigin(response: Response.empty(status: 403));
+        }
+        var mut out: Response = corsHeaders(config: config, origin: origin, response: Response.empty(status: 204));
+        out = out.withHeader(name: "access-control-allow-methods", value: join(values: config.allowedMethods, separator: ", "));
+        var requested: str = ctx.header(name: "access-control-request-headers");
+        if config.allowedHeaders.length() > 0 {
+            out = out.withHeader(name: "access-control-allow-headers", value: join(values: config.allowedHeaders, separator: ", "));
+        } else if !requested.isEmpty() {
+            out = out.withHeader(name: "access-control-allow-headers", value: requested);
+        }
+        if config.maxAge > 0 {
+            out = out.withHeader(name: "access-control-max-age", value: config.maxAge.toString());
+        }
+        return withVaryOrigin(response: out);
+    };
+    return Middleware(name: "cors", run: run);
+};

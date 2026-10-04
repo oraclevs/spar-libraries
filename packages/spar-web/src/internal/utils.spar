@@ -1,0 +1,151 @@
+import pkg { parse } from "std/json";
+
+// Printable asciiTable from 0x20 to 0x7e. SPAR has no char <-> code conversion, so
+// percent-decoding looks bytes up here. Bytes outside this range stay encoded.
+const asciiTable: str = " !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~";
+const hexDigits: str = "0123456789abcdef";
+const decimalDigits: str = "0123456789";
+
+fn charAt(value: str, index: int) -> str {
+    return value.substring(start: index, end: some<int>(value: index + 1));
+};
+
+fn indexIn(table: str, needle: str) -> int {
+    return table.indexOf(needle: needle).unwrapOr(fallback: -1);
+};
+
+// Decodes %XX for printable asciiTable (and '+' as space when asked). Anything else
+// is left as written so decoding never produces control characters.
+fn percentDecode(value: str, plusAsSpace: bool) -> str {
+    if !value.contains(needle: "%") && !(plusAsSpace && value.contains(needle: "+")) {
+        return value;
+    }
+    var mut out: str = "";
+    var mut i: int = 0;
+    var n: int = value.length();
+    while i < n {
+        var c: str = charAt(value: value, index: i);
+        if c == "%" && i + 2 <= n - 1 {
+            var hi: int = indexIn(table: hexDigits, needle: charAt(value: value, index: i + 1).toLowerCase());
+            var lo: int = indexIn(table: hexDigits, needle: charAt(value: value, index: i + 2).toLowerCase());
+            var code: int = hi * 16 + lo;
+            if hi >= 0 && lo >= 0 && code >= 32 && code <= 126 {
+                out = out + charAt(value: asciiTable, index: code - 32);
+                i = i + 3;
+            } else {
+                out = out + c;
+                i = i + 1;
+            }
+        } else if c == "+" && plusAsSpace {
+            out = out + " ";
+            i = i + 1;
+        } else {
+            out = out + c;
+            i = i + 1;
+        }
+    }
+    return out;
+};
+
+// "a=1&b=2&a=3" -> {a: ["1", "3"], b: ["2"]}
+fn parseQueryString(raw: str, plusAsSpace: bool) -> Map<str, List<str>> {
+    var mut result: Map<str, List<str>> = {};
+    if raw.isEmpty() {
+        return result;
+    }
+    for pair in raw.split(separator: "&") {
+        if pair.isEmpty() {
+            continue;
+        }
+        var cut: int = indexIn(table: pair, needle: "=");
+        var mut key: str = pair;
+        var mut val: str = "";
+        if cut >= 0 {
+            key = pair.substring(start: 0, end: some<int>(value: cut));
+            val = pair.substring(start: cut + 1, end: none<int>());
+        }
+        var k: str = percentDecode(value: key, plusAsSpace: plusAsSpace);
+        var v: str = percentDecode(value: val, plusAsSpace: plusAsSpace);
+        var mut existing: List<str> = result.getOr(key: k, fallback: []);
+        existing.append(value: v);
+        result.insert(key: k, value: existing);
+    }
+    return result;
+};
+
+fn isInteger(value: str) -> bool {
+    var mut text: str = value;
+    if text.startsWith(prefix: "-") {
+        text = text.substring(start: 1, end: none<int>());
+    }
+    if text.isEmpty() || text.length() > 18 {
+        return false;
+    }
+    var mut i: int = 0;
+    while i < text.length() {
+        if indexIn(table: decimalDigits, needle: charAt(value: text, index: i)) < 0 {
+            return false;
+        }
+        i = i + 1;
+    }
+    return true;
+};
+
+// Some(n) only for plain decimal integers.
+fn parseInt(value: str) -> Option<int> {
+    if !isInteger(value: value) {
+        return none<int>();
+    }
+    return some<int>(value: parse<int>(text: value));
+};
+
+// SPAR string literals have no \r or \0 escape; the JSON decoder does.
+fn cr() -> str {
+    return parse<str>(text: "\"\\u000d\"");
+};
+
+fn nul() -> str {
+    return parse<str>(text: "\"\\u0000\"");
+};
+
+fn crlf() -> str {
+    return cr() + "\n";
+};
+
+// Removes CR, LF and NUL so a value can never end a header line.
+fn stripLineBreaks(value: str) -> str {
+    return value.replace(from: cr(), to: "").replace(from: "\n", to: "").replace(from: nul(), to: "");
+};
+
+// "/a//b/" -> ["a", "b"]; empty segments are dropped.
+fn pathSegments(path: str) -> List<str> {
+    var mut out: List<str> = [];
+    for part in path.split(separator: "/") {
+        if !part.isEmpty() {
+            out.append(value: part);
+        }
+    }
+    return out;
+};
+
+// Canonical path: leading slash, no trailing slash, no empty segments.
+fn canonicalPath(path: str) -> str {
+    var segs: List<str> = pathSegments(path: path);
+    if segs.length() == 0 {
+        return "/";
+    }
+    return "/" + join(values: segs, separator: "/");
+};
+
+fn join(values: List<str>, separator: str) -> str {
+    var mut out: str = "";
+    var mut first: bool = true;
+    for v in values {
+        if !first {
+            out = out + separator;
+        }
+        out = out + v;
+        first = false;
+    }
+    return out;
+};

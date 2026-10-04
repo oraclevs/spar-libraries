@@ -1,0 +1,14 @@
+[package]
+name = "spar-native-macros"
+version = "0.0.1"
+edition = "2021"
+description = "Proc macros for writing Spar native modules (ABI 1.0)"
+license = "MIT"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+syn = { version = "2", features = ["full"] }
+quote = "1"
+proc-macro2 = "1"

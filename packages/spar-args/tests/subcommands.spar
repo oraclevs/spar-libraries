@@ -1,0 +1,279 @@
+import { Cli } from "../src/config/cli.spar";
+import { SubCommand } from "../src/config/command.spar";
+import { ArgOption } from "../src/config/option.spar";
+import { Flag, FlagAction } from "../src/config/flag.spar";
+import { Positional } from "../src/config/positional.spar";
+import { CliSettings } from "../src/config/settings.spar";
+import { Matches } from "../src/result/matches.spar";
+import { ParseError, ParseErrorKind } from "../src/result/parse_error.spar";
+import {
+    check,
+    checkEq,
+    report,
+    good,
+    succeeds,
+    failsWith,
+    errorOf
+} from "./support.spar";
+
+fn tree() -> Cli {
+    return Cli(
+        name: "spa",
+        flags: [
+            Flag(
+                name: "verbose",
+                short: "v",
+                long: "verbose",
+                action: FlagAction::Count,
+                global: true,
+            ),
+            Flag(name: "local", long: "local")
+        ],
+        options: [
+            ArgOption(name: "config", long: "config", global: true),
+            ArgOption(name: "root", long: "root")
+        ],
+        commands: [
+            SubCommand(
+                name: "package",
+                aliases: ["pkg"],
+                flags: [Flag(name: "dry", long: "dry", global: true)],
+            ),
+            SubCommand(
+                name: "add",
+                path: ["package"],
+                positionals: [Positional(name: "name", required: true)],
+                options: [ArgOption(name: "rev", long: "rev")],
+            ),
+            SubCommand(
+                name: "remove",
+                path: ["package"],
+                aliases: ["rm"],
+                positionals: [Positional(name: "name", required: true)],
+            ),
+            SubCommand(name: "registry", path: ["package"]),
+            SubCommand(
+                name: "add",
+                path: ["package", "registry"],
+                positionals: [Positional(name: "url", required: true)],
+            ),
+            SubCommand(name: "run", positionals: [Positional(name: "task")]),
+            SubCommand(name: "internal", hidden: true)
+        ],
+    );
+};
+
+fn selection() -> int {
+    var mut failed: int = 0;
+    var cli: Cli = tree();
+    failed = failed + check(
+        label: "no subcommand",
+        condition: good(cli: cli, argv: []).commandPath().length() == 0,
+    );
+    failed = failed + checkEq(
+        label: "top-level command",
+        actual: good(cli: cli, argv: ["run"]).command(),
+        expected: "run",
+    );
+    var two: Matches = good(cli: cli, argv: ["package", "add", "serde"]);
+    failed = failed + check(
+        label: "nested path",
+        condition: two.commandPath().join(separator: " ") == "package add",
+    );
+    failed = failed + checkEq(
+        label: "positional of the nested command",
+        actual: two.getStr(name: "name").unwrap(),
+        expected: "serde",
+    );
+    var three: Matches = good(
+        cli: cli,
+        argv: ["package", "registry", "add", "https://x"],
+    );
+    failed = failed + check(
+        label: "three levels deep",
+        condition: three.commandPath().join(separator: " ") == "package registry add",
+    );
+    failed = failed + checkEq(
+        label: "same name, different parent",
+        actual: three.getStr(name: "url").unwrap(),
+        expected: "https://x",
+    );
+    failed = failed + check(
+        label: "the other 'add' has no url",
+        condition: !two.has(name: "url"),
+    );
+    var aliased: Matches = good(cli: cli, argv: ["pkg", "rm", "serde"]);
+    failed = failed + check(
+        label: "aliases resolve to canonical names",
+        condition: aliased.commandPath().join(separator: " ") == "package remove",
+    );
+    failed = failed + check(
+        label: "positional word is not a subcommand",
+        condition: good(cli: cli, argv: ["run", "add"])
+            .getStr(name: "task")
+            .unwrap() == "add",
+    );
+    failed = failed + check(
+        label: "hidden commands still run",
+        condition: good(cli: cli, argv: ["internal"]).command() == "internal",
+    );
+    return failed;
+};
+
+fn scoping() -> int {
+    var mut failed: int = 0;
+    var cli: Cli = tree();
+    var m: Matches = good(
+        cli: cli,
+        argv: ["-v", "package", "--dry", "add", "x", "-vv", "--rev", "2"],
+    );
+    failed = failed + check(
+        label: "global flag counted across levels",
+        condition: m.count(name: "verbose") == 3,
+    );
+    failed = failed + check(
+        label: "global flag of an intermediate command",
+        condition: m.flag(name: "dry"),
+    );
+    failed = failed + check(
+        label: "command option",
+        condition: m.getStr(name: "rev").unwrap() == "2",
+    );
+    var late: Matches = good(
+        cli: cli,
+        argv: ["package", "add", "x", "--config", "c.toml"],
+    );
+    failed = failed + checkEq(
+        label: "global option usable after the subcommand",
+        actual: late.getStr(name: "config").unwrap(),
+        expected: "c.toml",
+    );
+    var early: Matches = good(cli: cli, argv: ["--config", "c.toml", "run"]);
+    failed = failed + checkEq(
+        label: "global option usable before it",
+        actual: early.getStr(name: "config").unwrap(),
+        expected: "c.toml",
+    );
+    failed = failed + check(
+        label: "local flag works at its own level",
+        condition: good(cli: cli, argv: ["--local", "run"]).flag(
+            name: "local",
+        ),
+    );
+    failed = failed + check(
+        label: "non-global flag is not inherited",
+        condition: failsWith(
+            cli: cli,
+            argv: ["run", "--local"],
+            kind: ParseErrorKind::UnknownArgument,
+        ),
+    );
+    failed = failed + check(
+        label: "non-global option is not inherited",
+        condition: failsWith(
+            cli: cli,
+            argv: ["package", "add", "x", "--root", "/"],
+            kind: ParseErrorKind::UnknownArgument,
+        ),
+    );
+    failed = failed + check(
+        label: "child options are unknown to the parent",
+        condition: failsWith(
+            cli: cli,
+            argv: ["package", "--rev", "1"],
+            kind: ParseErrorKind::UnknownArgument,
+        ),
+    );
+    failed = failed + check(
+        label: "required positional of the subcommand",
+        condition: failsWith(
+            cli: cli,
+            argv: ["package", "add"],
+            kind: ParseErrorKind::MissingRequired,
+        ),
+    );
+    var untouched: Matches = good(cli: cli, argv: ["run"]);
+    failed = failed + check(
+        label: "unused global flag reads as 0",
+        condition: untouched.count(name: "verbose") == 0,
+    );
+    return failed;
+};
+
+fn mistakes() -> int {
+    var mut failed: int = 0;
+    var cli: Cli = tree();
+    failed = failed + check(
+        label: "unknown subcommand",
+        condition: failsWith(
+            cli: cli,
+            argv: ["bogus"],
+            kind: ParseErrorKind::UnknownCommand,
+        ),
+    );
+    failed = failed + check(
+        label: "unknown nested subcommand",
+        condition: failsWith(
+            cli: cli,
+            argv: ["package", "bogus"],
+            kind: ParseErrorKind::UnknownCommand,
+        ),
+    );
+    var typo: ParseError = errorOf(cli: cli, argv: ["package", "ad"]);
+    failed = failed + checkEq(
+        label: "subcommand suggestion",
+        actual: typo.suggestion,
+        expected: "add",
+    );
+    failed = failed + check(
+        label: "error carries the command path",
+        condition: typo.path.join(separator: " ") == "package",
+    );
+    failed = failed + check(
+        label: "and its usage line",
+        condition: typo.usage.contains(needle: "spa package"),
+    );
+    var flagTypo: ParseError = errorOf(cli: cli, argv: ["--verbos"]);
+    failed = failed + checkEq(
+        label: "flag suggestion",
+        actual: flagTypo.suggestion,
+        expected: "--verbose",
+    );
+    failed = failed + check(
+        label: "render includes the tip",
+        condition: flagTypo
+            .render()
+            .contains(needle: "did you mean '--verbose'"),
+    );
+    failed = failed + check(
+        label: "failures exit with 2",
+        condition: flagTypo.exitCode() == 2 && flagTypo.isFailure(),
+    );
+    var lenient: Cli = Cli(
+        name: "t",
+        commands: [SubCommand(name: "go")],
+        settings: CliSettings(allowUnknownArguments: true),
+    );
+    failed = failed + check(
+        label: "unknown subcommand tolerated when allowed",
+        condition: good(cli: lenient, argv: ["nope"]).unknown.length() == 1,
+    );
+    var insensitive: Cli = Cli(
+        name: "t",
+        commands: [SubCommand(name: "Build")],
+        settings: CliSettings(caseSensitive: false),
+    );
+    failed = failed + check(
+        label: "case-insensitive subcommands",
+        condition: good(cli: insensitive, argv: ["BUILD"]).command() == "Build",
+    );
+    return failed;
+};
+
+fn main() -> int {
+    var mut bad: int = 0;
+    bad = bad + report(suite: "subcommand selection", failures: selection());
+    bad = bad + report(suite: "subcommand scoping", failures: scoping());
+    bad = bad + report(suite: "subcommand mistakes", failures: mistakes());
+    return bad;
+};

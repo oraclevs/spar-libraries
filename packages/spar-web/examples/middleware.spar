@@ -1,0 +1,50 @@
+// Request logging (spar-log) plus custom middleware: timing header and a
+// short-circuiting maintenance switch.
+//   printf 'GET /hello HTTP/1.1\r\n\r\n' | spar exec examples/middleware.spar
+//   printf 'GET /hello HTTP/1.1\r\n\r\n' | MAINTENANCE=1 spar exec examples/middleware.spar
+import pkg { println } from "std/io";
+import pkg { has } from "std/env";
+import pkg { nowMillis } from "std/time";
+import { Context } from "../src/http/context.spar";
+import { WebError } from "../src/error/web_error.spar";
+import { Response } from "../src/http/response.spar";
+import { Middleware, middleware } from "../src/middleware/middleware.spar";
+import { requestLogger, stderrLogger } from "../src/middleware/request_log.spar";
+import { Route } from "../src/routing/route.spar";
+import { App, Server } from "../src/app/app.spar";
+import { serveStdio } from "../src/transport/stdio.spar";
+
+fn hello(ctx: Context) -> Response {
+    return Response.text(value: "hello " + ctx.query(name: "name", default: "world"));
+};
+
+fn timing() -> Middleware {
+    return middleware(name: "timing", run: fn(ctx: Context, next: fn(Context) -> Response) -> Response {
+        var started: int = nowMillis();
+        var res: Response = next(arg0: ctx);
+        return res.withHeader(name: "x-elapsed-ms", value: (nowMillis() - started).toString());
+    });
+};
+
+fn maintenance() -> Middleware {
+    return middleware(name: "maintenance", run: fn(ctx: Context, next: fn(Context) -> Response) -> Response {
+        if has(name: "MAINTENANCE") {
+            return Response.text(value: "back soon", status: 503).withHeader(name: "retry-after", value: "60");
+        }
+        return next(arg0: ctx);
+    });
+};
+
+fn main() -> int {
+    // Order: log first (sees every response, including 503), then time, then the gate.
+    var app: App = App(
+        routes: [Route.get(path: "/hello", handler: hello)],
+        middleware: [requestLogger(logger: stderrLogger()), timing(), maintenance()],
+    );
+    var compiled: Result<Server, WebError> = app.compile();
+    if compiled.isErr() {
+        println(value: compiled.unwrapErr().message);
+        return 1;
+    }
+    return serveStdio(server: compiled.unwrap());
+};

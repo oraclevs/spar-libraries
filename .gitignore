@@ -1,0 +1,9 @@
+**/target/
+**/dist/
+**/spar.package.lock.spar
+**/.spa/
+**/*.key
+.DS_Store
+**/*.so
+**/*.dylib
+**/*.dll

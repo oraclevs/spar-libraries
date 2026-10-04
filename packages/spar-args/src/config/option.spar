@@ -1,0 +1,25 @@
+import { Choice } from "./choice.spar";
+import { ValueSpec } from "./value_spec.spar";
+
+// An argument that takes a value: `--output file`, `-o file`, `--output=file`.
+// `name` is the key used to read the value from the matches. `short` is a
+// single character without the dash; empty means none.
+export struct ArgOption {
+    name: str;
+    short: str = "";
+    long: str = "";
+    aliases: List<str> = [];
+    help: str = "";
+    longHelp: str = "";
+    valueName: str = "";
+    value: ValueSpec = ValueSpec();
+    required: bool = false;
+    repeatable: bool = false;
+    defaultValues: List<str> = [];
+    choices: List<Choice> = [];
+    requires: List<str> = [];
+    conflictsWith: List<str> = [];
+    hidden: bool = false;
+    global: bool = false;
+    deprecated: str = "";
+};

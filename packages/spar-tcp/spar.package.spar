@@ -1,0 +1,19 @@
+struct Package {
+    name: str = "tcp";
+    version: str = "0.1.0";
+    kind: str = "library";
+    entry: str = "src/lib.spar";
+};
+
+struct Native {
+    module: str = "nativeTcp";
+    abi: str = "spar-native-1";
+    capabilities: str = "strings,bytes,typed-arrays,resources,async";
+    interface: str = "native/interface.json";
+    linuxX8664Gnu: str = "native/linux_x86_64_gnu/librust_tcp.so";
+    linuxX8664Musl: str = "native/linux_x86_64_musl/librust_tcp.so";
+    linuxAarch64Gnu: str = "native/linux_aarch64_gnu/librust_tcp.so";
+    macosX8664: str = "native/macos_x86_64/librust_tcp.dylib";
+    macosAarch64: str = "native/macos_aarch64/librust_tcp.dylib";
+    windowsX8664Msvc: str = "native/windows_x86_64_msvc/rust_tcp.dll";
+};

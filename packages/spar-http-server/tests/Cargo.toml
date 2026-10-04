@@ -1,0 +1,15 @@
+[package]
+name = "spar-http-server-e2e"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[[test]]
+name = "e2e"
+path = "e2e.rs"
+
+[dev-dependencies]
+rustls = { version = "0.23.44", default-features = false, features = ["ring", "std", "tls12"] }
+rustls-pemfile = "2.2.0"
+
+[workspace]

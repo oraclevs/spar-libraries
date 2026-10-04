@@ -1,0 +1,52 @@
+// Public root surface of Spar's bundled standard library package.
+fn print(value: Any = "") -> void {
+    nativeIo::print(value: value);
+    return;
+};
+
+fn println(value: Any = "") -> void {
+    nativeIo::println(value: value);
+    return;
+};
+
+fn len<T>(value: T) -> int {
+    return nativeCore::len(value: value);
+};
+
+fn range(end: int) -> [int] {
+    return nativeCore::range(start: 0, end: end);
+};
+
+fn rangeFrom(start: int, end: int) -> [int] {
+    return nativeCore::range(start: start, end: end);
+};
+
+fn assert(condition: bool, message: str) -> void {
+    if !condition {
+        panic(message: message);
+    }
+    return;
+};
+
+fn version() -> str {
+    return "0.3.0";
+};
+
+// Constructors for Spar's first-class optional/result values. These remain
+// free functions because they create values; instance behavior lives on the
+// values themselves.
+fn some<T>(value: T) -> Option<T> {
+    return nativeCore::some(value: value);
+};
+
+fn none<T>() -> Option<T> {
+    return nativeCore::none();
+};
+
+fn ok<T, E>(value: T) -> Result<T, E> {
+    return nativeCore::ok(value: value);
+};
+
+fn err<T, E>(error: E) -> Result<T, E> {
+    return nativeCore::err(error: error);
+};

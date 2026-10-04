@@ -1,0 +1,41 @@
+fn print(value: Any = "") -> void {
+    nativeIo::print(value: value);
+    return;
+};
+
+fn println(value: Any = "") -> void {
+    nativeIo::println(value: value);
+    return;
+};
+
+fn eprint(value: Any = "") -> void {
+    nativeIo::eprint(value: value);
+    return;
+};
+
+fn eprintln(value: Any = "") -> void {
+    nativeIo::eprintln(value: value);
+    return;
+};
+
+fn readAll() -> str {
+    return nativeIo::readAll();
+};
+
+fn readLine() -> str {
+    return nativeIo::readLine();
+};
+
+fn readBytes() -> Bytes {
+    return nativeIo::readBytes();
+};
+
+fn writeBytes(content: Bytes) -> void {
+    nativeIo::writeBytes(content: content);
+    return;
+};
+
+fn writeErrorBytes(content: Bytes) -> void {
+    nativeIo::writeErrorBytes(content: content);
+    return;
+};

@@ -1,0 +1,165 @@
+import { Failure } from "../result/failure.spar";
+import {
+    Value,
+    intValue,
+    floatValue,
+    boolValue,
+    strValue,
+    intListValue,
+    floatListValue,
+    boolListValue,
+    strListValue
+} from "../result/value.spar";
+import { failNow } from "../core/context.spar";
+
+// Spar cannot compare structs or lists with `==` and generic code cannot
+// compare at all, so there is one typed assertion per supported type.
+// `assertEqual` is int; the others carry their type in the name.
+
+fn mismatch(assertion: str, message: str, expected: Value, actual: Value) -> void {
+    failNow(failure: Failure(
+        assertion: assertion,
+        message: message,
+        expected: expected,
+        actual: actual,
+    ));
+    return;
+};
+
+fn assertEqual(actual: int, expected: int, message: str = "") -> void {
+    if actual != expected {
+        mismatch(assertion: "assertEqual", message: message, expected: intValue(value: expected), actual: intValue(value: actual));
+    }
+    return;
+};
+
+fn assertNotEqual(actual: int, expected: int, message: str = "") -> void {
+    if actual == expected {
+        mismatch(assertion: "assertNotEqual", message: message, expected: intValue(value: expected), actual: intValue(value: actual));
+    }
+    return;
+};
+
+fn assertEqualStr(actual: str, expected: str, message: str = "") -> void {
+    if actual != expected {
+        mismatch(assertion: "assertEqualStr", message: message, expected: strValue(value: expected), actual: strValue(value: actual));
+    }
+    return;
+};
+
+fn assertNotEqualStr(actual: str, expected: str, message: str = "") -> void {
+    if actual == expected {
+        mismatch(assertion: "assertNotEqualStr", message: message, expected: strValue(value: expected), actual: strValue(value: actual));
+    }
+    return;
+};
+
+fn assertEqualBool(actual: bool, expected: bool, message: str = "") -> void {
+    if actual != expected {
+        mismatch(assertion: "assertEqualBool", message: message, expected: boolValue(value: expected), actual: boolValue(value: actual));
+    }
+    return;
+};
+
+fn assertNotEqualBool(actual: bool, expected: bool, message: str = "") -> void {
+    if actual == expected {
+        mismatch(assertion: "assertNotEqualBool", message: message, expected: boolValue(value: expected), actual: boolValue(value: actual));
+    }
+    return;
+};
+
+// Floats match when they differ by at most `tolerance` (default exact).
+fn assertEqualFloat(actual: float, expected: float, tolerance: float = 0.0, message: str = "") -> void {
+    var mut diff: float = actual - expected;
+    if diff < 0.0 {
+        diff = 0.0 - diff;
+    }
+    if diff > tolerance {
+        mismatch(assertion: "assertEqualFloat", message: message, expected: floatValue(value: expected), actual: floatValue(value: actual));
+    }
+    return;
+};
+
+fn sameInts(left: List<int>, right: List<int>) -> bool {
+    if left.length() != right.length() {
+        return false;
+    }
+    var mut i: int = 0;
+    while i < left.length() {
+        if left.get(index: i).unwrap() != right.get(index: i).unwrap() {
+            return false;
+        }
+        i = i + 1;
+    }
+    return true;
+};
+
+fn sameStrs(left: List<str>, right: List<str>) -> bool {
+    if left.length() != right.length() {
+        return false;
+    }
+    var mut i: int = 0;
+    while i < left.length() {
+        if left.get(index: i).unwrap() != right.get(index: i).unwrap() {
+            return false;
+        }
+        i = i + 1;
+    }
+    return true;
+};
+
+fn sameFloats(left: List<float>, right: List<float>) -> bool {
+    if left.length() != right.length() {
+        return false;
+    }
+    var mut i: int = 0;
+    while i < left.length() {
+        if left.get(index: i).unwrap() != right.get(index: i).unwrap() {
+            return false;
+        }
+        i = i + 1;
+    }
+    return true;
+};
+
+fn sameBools(left: List<bool>, right: List<bool>) -> bool {
+    if left.length() != right.length() {
+        return false;
+    }
+    var mut i: int = 0;
+    while i < left.length() {
+        if left.get(index: i).unwrap() != right.get(index: i).unwrap() {
+            return false;
+        }
+        i = i + 1;
+    }
+    return true;
+};
+
+fn assertEqualInts(actual: List<int>, expected: List<int>, message: str = "") -> void {
+    if !sameInts(left: actual, right: expected) {
+        mismatch(assertion: "assertEqualInts", message: message, expected: intListValue(value: expected), actual: intListValue(value: actual));
+    }
+    return;
+};
+
+fn assertEqualStrs(actual: List<str>, expected: List<str>, message: str = "") -> void {
+    if !sameStrs(left: actual, right: expected) {
+        mismatch(assertion: "assertEqualStrs", message: message, expected: strListValue(value: expected), actual: strListValue(value: actual));
+    }
+    return;
+};
+
+fn assertEqualFloats(actual: List<float>, expected: List<float>, message: str = "") -> void {
+    if !sameFloats(left: actual, right: expected) {
+        mismatch(assertion: "assertEqualFloats", message: message, expected: floatListValue(value: expected), actual: floatListValue(value: actual));
+    }
+    return;
+};
+
+fn assertEqualBools(actual: List<bool>, expected: List<bool>, message: str = "") -> void {
+    if !sameBools(left: actual, right: expected) {
+        mismatch(assertion: "assertEqualBools", message: message, expected: boolListValue(value: expected), actual: boolListValue(value: actual));
+    }
+    return;
+};
