@@ -1,0 +1,71 @@
+import { Cli } from "../src/config/cli.spar";
+import { Matches } from "../src/result/matches.spar";
+import { ParseError, ParseErrorKind } from "../src/result/parse_error.spar";
+import { parse } from "../src/parser/parser.spar";
+
+// Each check returns 0 on success and 1 on failure, so a suite can add them up.
+fn check(label: str, condition: bool) -> int {
+    if condition {
+        return 0;
+    }
+    println(value: "  FAIL: ${label}");
+    return 1;
+};
+
+fn checkEq(label: str, actual: str, expected: str) -> int {
+    if actual == expected {
+        return 0;
+    }
+    println(value: "  FAIL: ${label}");
+    println(value: "    expected: ${expected}");
+    println(value: "    actual:   ${actual}");
+    return 1;
+};
+
+fn report(suite: str, failures: int) -> int {
+    if failures == 0 {
+        println(value: "ok    ${suite}");
+        return 0;
+    }
+    println(value: "FAIL  ${suite}: ${failures} failing check(s)");
+    return 1;
+};
+
+fn run(cli: Cli, argv: List<str>) -> Result<Matches, ParseError> {
+    return parse(cli: cli, argv: argv);
+};
+
+// The matches of a parse that must succeed (empty matches otherwise).
+fn good(cli: Cli, argv: List<str>) -> Matches {
+    var result: Result<Matches, ParseError> = parse(cli: cli, argv: argv);
+    if result.isOk() {
+        return result.unwrap();
+    }
+    var error: ParseError = result.unwrapErr();
+    println(value: "  unexpected parse error: ${error.message}");
+    return Matches();
+};
+
+fn succeeds(cli: Cli, argv: List<str>) -> bool {
+    return parse(cli: cli, argv: argv).isOk();
+};
+
+// True when the parse fails with exactly this error kind.
+fn failsWith(cli: Cli, argv: List<str>, kind: ParseErrorKind) -> bool {
+    var result: Result<Matches, ParseError> = parse(cli: cli, argv: argv);
+    if result.isOk() {
+        return false;
+    }
+    return result.unwrapErr().kind == kind;
+};
+
+fn errorOf(cli: Cli, argv: List<str>) -> ParseError {
+    var result: Result<Matches, ParseError> = parse(cli: cli, argv: argv);
+    if result.isErr() {
+        return result.unwrapErr();
+    }
+    return ParseError(
+        kind: ParseErrorKind::InvalidConfiguration,
+        message: "expected an error but the parse succeeded",
+    );
+};

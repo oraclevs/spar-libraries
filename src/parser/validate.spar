@@ -1,0 +1,434 @@
+import { Cli } from "../config/cli.spar";
+import { SubCommand } from "../config/command.spar";
+import { ArgOption } from "../config/option.spar";
+import { Flag, FlagAction } from "../config/flag.spar";
+import { Positional } from "../config/positional.spar";
+import { ArgGroup } from "../config/group.spar";
+import { ArgMatch } from "../result/match.spar";
+import { Matches } from "../result/matches.spar";
+import { ParseError } from "../result/parse_error.spar";
+import {
+    Scope,
+    buildScope,
+    findCommand,
+    prefixOf
+} from "../internal/arg_spec.spar";
+import { listContains, sameList } from "../internal/text.spar";
+import { optionValueName, positionalLabel } from "../help/usage.spar";
+import {
+    missingRequired,
+    conflict,
+    missingRequirement,
+    groupViolation
+} from "./errors.spar";
+
+fn argNames(scope: Scope) -> List<str> {
+    var mut names: List<str> = [];
+    for option in scope.options {
+        names.append(value: option.name);
+    }
+    for flag in scope.flags {
+        names.append(value: flag.name);
+    }
+    for positional in scope.positionals {
+        names.append(value: positional.name);
+    }
+    return names;
+};
+
+fn spelledOption(option: ArgOption) -> str {
+    if option.long != "" {
+        return "--${option.long}";
+    }
+    return "-${option.short}";
+};
+
+fn spelledFlag(flag: Flag) -> str {
+    if flag.long != "" {
+        return "--${flag.long}";
+    }
+    return "-${flag.short}";
+};
+
+// How an argument is written in messages: --output, -v or <NAME>.
+fn labelFor(scope: Scope, name: str) -> str {
+    for option in scope.options {
+        if option.name == name {
+            return spelledOption(option: option);
+        }
+    }
+    for flag in scope.flags {
+        if flag.name == name {
+            return spelledFlag(flag: flag);
+        }
+    }
+    for positional in scope.positionals {
+        if positional.name == name {
+            return positionalLabel(positional: positional);
+        }
+    }
+    return name;
+};
+
+fn levelProblems(label: str, scope: Scope) -> List<str> {
+    var mut problems: List<str> = [];
+    var names: List<str> = argNames(scope: scope);
+    var mut seen: List<str> = [];
+    for name in names {
+        if name == "" {
+            problems.append(value: "${label}: an argument has an empty name");
+        } else if listContains(
+            items: seen,
+            wanted: name,
+            caseSensitive: true,
+        ) {
+            problems.append(
+                value: "${label}: argument name '${name}' is used more than once",
+            );
+        }
+        seen.append(value: name);
+    }
+    for option in scope.options {
+        if option.short == "" && option.long == "" {
+            problems.append(
+                value: "${label}: option '${option.name}' needs a short or long spelling",
+            );
+        }
+        if option.short.length() > 1 {
+            problems.append(
+                value: "${label}: short spelling of '${option.name}' must be one character",
+            );
+        }
+        for target in option.requires {
+            if !listContains(
+                items: names,
+                wanted: target,
+                caseSensitive: true,
+            ) {
+                problems.append(
+                    value: "${label}: '${option.name}' requires unknown argument '${target}'",
+                );
+            }
+        }
+        for target in option.conflictsWith {
+            if !listContains(
+                items: names,
+                wanted: target,
+                caseSensitive: true,
+            ) {
+                problems.append(
+                    value: "${label}: '${option.name}' conflicts with unknown argument '${target}'",
+                );
+            }
+        }
+    }
+    for flag in scope.flags {
+        if flag.short == "" && flag.long == "" {
+            problems.append(
+                value: "${label}: flag '${flag.name}' needs a short or long spelling",
+            );
+        }
+        if flag.short.length() > 1 {
+            problems.append(
+                value: "${label}: short spelling of '${flag.name}' must be one character",
+            );
+        }
+        for target in flag.requires {
+            if !listContains(
+                items: names,
+                wanted: target,
+                caseSensitive: true,
+            ) {
+                problems.append(
+                    value: "${label}: '${flag.name}' requires unknown argument '${target}'",
+                );
+            }
+        }
+        for target in flag.conflictsWith {
+            if !listContains(
+                items: names,
+                wanted: target,
+                caseSensitive: true,
+            ) {
+                problems.append(
+                    value: "${label}: '${flag.name}' conflicts with unknown argument '${target}'",
+                );
+            }
+        }
+    }
+    for group in scope.groups {
+        for member in group.members {
+            if !listContains(
+                items: names,
+                wanted: member,
+                caseSensitive: true,
+            ) {
+                problems.append(
+                    value: "${label}: group '${group.name}' lists unknown argument '${member}'",
+                );
+            }
+        }
+    }
+    return problems;
+};
+
+fn joinPath(path: List<str>) -> str {
+    return path.join(separator: " ");
+};
+
+// Mistakes in the CLI definition itself. Empty means it is usable.
+fn checkCli(cli: Cli) -> List<str> {
+    var mut problems: List<str> = [];
+    if cli.name.trim() == "" {
+        problems.append(value: "the CLI has no name");
+    }
+    for problem in levelProblems(
+        label: "root",
+        scope: buildScope(cli: cli, path: []),
+    ) {
+        problems.append(value: problem);
+    }
+    var mut seenPaths: List<str> = [];
+    for sub in cli.commands {
+        var mut full: List<str> = [];
+        for part in sub.path {
+            full.append(value: part);
+        }
+        full.append(value: sub.name);
+        var label: str = "command '${joinPath(path: full)}'";
+        if sub.name.trim() == "" {
+            problems.append(value: "a command has an empty name");
+            continue;
+        }
+        if sub.path.length() > 0
+            && findCommand(cli: cli, path: sub.path).isNone() {
+            problems.append(value: "${label}: parent command is not defined");
+        }
+        var key: str = joinPath(path: full);
+        if listContains(items: seenPaths, wanted: key, caseSensitive: true) {
+            problems.append(value: "${label} is defined more than once");
+        }
+        seenPaths.append(value: key);
+        for problem in levelProblems(
+            label: label,
+            scope: buildScope(cli: cli, path: full),
+        ) {
+            problems.append(value: problem);
+        }
+    }
+    return problems;
+};
+
+fn present(matches: Matches, name: str) -> bool {
+    return matches.given(name: name);
+};
+
+fn finalizeFlags(scope: Scope, matches: Matches) -> Matches {
+    var mut result: Matches = matches;
+    for flag in scope.flags {
+        var existing: Option<ArgMatch> = result.args.get(key: flag.name);
+        if flag.action == FlagAction::Count {
+            var mut occurrences: int = 0;
+            var mut explicit: bool = false;
+            if existing.isSome() {
+                occurrences = existing.unwrap().occurrences;
+                explicit = existing.unwrap().explicit;
+            }
+            result.args.insert(
+                key: flag.name,
+                value: ArgMatch(
+                    name: flag.name,
+                    values: ["${occurrences}"],
+                    occurrences: occurrences,
+                    explicit: explicit,
+                ),
+            );
+        } else if existing.isNone() {
+            var mut off: str = "false";
+            if flag.action == FlagAction::SetFalse {
+                off = "true";
+            }
+            result.args.insert(
+                key: flag.name,
+                value: ArgMatch(name: flag.name, values: [off]),
+            );
+        }
+    }
+    return result;
+};
+
+fn withDefault(matches: Matches, name: str, defaults: List<str>) -> Matches {
+    var mut result: Matches = matches;
+    if defaults.length() == 0 || result.given(name: name) {
+        return result;
+    }
+    result.args.insert(
+        key: name,
+        value: ArgMatch(name: name, values: defaults),
+    );
+    return result;
+};
+
+fn missingLabels(scope: Scope, matches: Matches) -> List<str> {
+    var mut labels: List<str> = [];
+    for option in scope.options {
+        if option.required
+            && !present(matches: matches, name: option.name)
+            && option.defaultValues.length() == 0 {
+            var spelling: str = spelledOption(option: option);
+            var valueName: str = optionValueName(option: option);
+            labels.append(value: "${spelling} <${valueName}>");
+        }
+    }
+    for positional in scope.positionals {
+        if positional.required
+            && !present(matches: matches, name: positional.name)
+            && positional.defaultValues.length() == 0 {
+            labels.append(value: positionalLabel(positional: positional));
+        }
+    }
+    return labels;
+};
+
+fn checkLinks(
+    cli: Cli,
+    scope: Scope,
+    matches: Matches,
+    name: str,
+    requires: List<str>,
+    conflictsWith: List<str>,
+) -> Option<ParseError> {
+    if !present(matches: matches, name: name) {
+        return none();
+    }
+    var label: str = labelFor(scope: scope, name: name);
+    for other in conflictsWith {
+        if present(matches: matches, name: other) {
+            return some(value: conflict(
+                cli: cli,
+                path: scope.path,
+                first: label,
+                second: labelFor(scope: scope, name: other),
+            ));
+        }
+    }
+    for needed in requires {
+        if !present(matches: matches, name: needed) {
+            return some(value: missingRequirement(
+                cli: cli,
+                path: scope.path,
+                name: label,
+                needed: labelFor(scope: scope, name: needed),
+            ));
+        }
+    }
+    return none();
+};
+
+fn checkGroup(
+    cli: Cli,
+    scope: Scope,
+    matches: Matches,
+    group: ArgGroup,
+) -> Option<ParseError> {
+    var mut used: int = 0;
+    var mut labels: List<str> = [];
+    for member in group.members {
+        labels.append(value: labelFor(scope: scope, name: member));
+        if present(matches: matches, name: member) {
+            used = used + 1;
+        }
+    }
+    var listed: str = labels.join(separator: ", ");
+    var mut least: int = group.minPresent;
+    if group.required && least < 1 {
+        least = 1;
+    }
+    if used < least {
+        return some(value: groupViolation(
+            cli: cli,
+            path: scope.path,
+            group: group.name,
+            detail: "at least ${least} of [${listed}] must be provided",
+        ));
+    }
+    if group.maxPresent > 0 && used > group.maxPresent {
+        return some(value: groupViolation(
+            cli: cli,
+            path: scope.path,
+            group: group.name,
+            detail: "at most ${group.maxPresent} of [${listed}] may be used together",
+        ));
+    }
+    return none();
+};
+
+// Fills in defaults, then enforces conflicts, requirements, required
+// arguments and groups. Everything here looks only at what the user typed.
+fn finalize(
+    cli: Cli,
+    scope: Scope,
+    matches: Matches,
+) -> Result<Matches, ParseError> {
+    for option in scope.options {
+        var failure: Option<ParseError> = checkLinks(
+            cli: cli,
+            scope: scope,
+            matches: matches,
+            name: option.name,
+            requires: option.requires,
+            conflictsWith: option.conflictsWith,
+        );
+        if failure.isSome() {
+            return err<Matches, ParseError>(error: failure.unwrap());
+        }
+    }
+    for flag in scope.flags {
+        var failure: Option<ParseError> = checkLinks(
+            cli: cli,
+            scope: scope,
+            matches: matches,
+            name: flag.name,
+            requires: flag.requires,
+            conflictsWith: flag.conflictsWith,
+        );
+        if failure.isSome() {
+            return err<Matches, ParseError>(error: failure.unwrap());
+        }
+    }
+    var missing: List<str> = missingLabels(scope: scope, matches: matches);
+    if missing.length() > 0 {
+        return err<Matches, ParseError>(error: missingRequired(
+            cli: cli,
+            path: scope.path,
+            labels: missing,
+        ));
+    }
+    for group in scope.groups {
+        var failure: Option<ParseError> = checkGroup(
+            cli: cli,
+            scope: scope,
+            matches: matches,
+            group: group,
+        );
+        if failure.isSome() {
+            return err<Matches, ParseError>(error: failure.unwrap());
+        }
+    }
+    var mut result: Matches = finalizeFlags(scope: scope, matches: matches);
+    for option in scope.options {
+        result = withDefault(
+            matches: result,
+            name: option.name,
+            defaults: option.defaultValues,
+        );
+    }
+    for positional in scope.positionals {
+        result = withDefault(
+            matches: result,
+            name: positional.name,
+            defaults: positional.defaultValues,
+        );
+    }
+    return ok<Matches, ParseError>(value: result);
+};

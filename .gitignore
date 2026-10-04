@@ -1,0 +1,5 @@
+temp/
+/target/
+/dist/
+/spar.package.lock.spar
+*.key

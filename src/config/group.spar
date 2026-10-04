@@ -1,0 +1,10 @@
+// A rule over several arguments, listed by name in `members`.
+// `required` means at least one member must be present. maxPresent = 0
+// means no upper limit.
+export struct ArgGroup {
+    name: str;
+    members: List<str> = [];
+    minPresent: int = 0;
+    maxPresent: int = 0;
+    required: bool = false;
+};

@@ -1,0 +1,21 @@
+import { ArgOption } from "./option.spar";
+import { Flag } from "./flag.spar";
+import { Positional } from "./positional.spar";
+import { ArgGroup } from "./group.spar";
+
+// A subcommand. Commands are stored flat in Cli.commands; `path` lists the
+// ancestors, so `spa package registry add` is name "add" with
+// path ["package", "registry"]. A top-level command has an empty path.
+// (`Command` itself is a built-in Spar type.)
+export struct SubCommand {
+    name: str;
+    path: List<str> = [];
+    aliases: List<str> = [];
+    about: str = "";
+    longAbout: str = "";
+    options: List<ArgOption> = [];
+    flags: List<Flag> = [];
+    positionals: List<Positional> = [];
+    groups: List<ArgGroup> = [];
+    hidden: bool = false;
+};

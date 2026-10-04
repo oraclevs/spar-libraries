@@ -1,0 +1,231 @@
+import { Cli } from "../config/cli.spar";
+import { SubCommand } from "../config/command.spar";
+import { ArgOption } from "../config/option.spar";
+import { Flag } from "../config/flag.spar";
+import { Positional } from "../config/positional.spar";
+import { ArgGroup } from "../config/group.spar";
+import { sameText, sameList, listContains } from "./text.spar";
+
+// Everything that can appear on the command line once a subcommand has been
+// selected: that subcommand's own arguments plus the `global` options and flags
+// of every ancestor.
+export struct Scope {
+    path: List<str> = [];
+    options: List<ArgOption> = [];
+    flags: List<Flag> = [];
+    positionals: List<Positional> = [];
+    groups: List<ArgGroup> = [];
+    children: List<SubCommand> = [];
+};
+
+fn prefixOf(items: List<str>, count: int) -> List<str> {
+    var mut out: List<str> = [];
+    var mut i: int = 0;
+    while i < count && i < items.length() {
+        out.append(value: items[i]);
+        i = i + 1;
+    }
+    return out;
+};
+
+fn childrenOf(cli: Cli, path: List<str>) -> List<SubCommand> {
+    var mut out: List<SubCommand> = [];
+    for sub in cli.commands {
+        if sameList(left: sub.path, right: path) {
+            out.append(value: sub);
+        }
+    }
+    return out;
+};
+
+fn commandMatches(sub: SubCommand, word: str, caseSensitive: bool) -> bool {
+    return sameText(left: sub.name, right: word, caseSensitive: caseSensitive)
+        || listContains(
+            items: sub.aliases,
+            wanted: word,
+            caseSensitive: caseSensitive,
+        );
+};
+
+// The direct child of `path` called `word` (by name or alias).
+fn findChild(cli: Cli, path: List<str>, word: str) -> Option<SubCommand> {
+    for sub in childrenOf(cli: cli, path: path) {
+        if commandMatches(
+            sub: sub,
+            word: word,
+            caseSensitive: cli.settings.caseSensitive,
+        ) {
+            return some(value: sub);
+        }
+    }
+    return none();
+};
+
+// The subcommand whose canonical full path is `path`.
+fn findCommand(cli: Cli, path: List<str>) -> Option<SubCommand> {
+    if path.length() == 0 {
+        return none();
+    }
+    var parent: List<str> = prefixOf(items: path, count: path.length() - 1);
+    var wanted: str = path[path.length() - 1];
+    for sub in childrenOf(cli: cli, path: parent) {
+        if sub.name == wanted {
+            return some(value: sub);
+        }
+    }
+    return none();
+};
+
+fn buildScope(cli: Cli, path: List<str>) -> Scope {
+    var mut ownOptions: List<ArgOption> = cli.options;
+    var mut ownFlags: List<Flag> = cli.flags;
+    var mut ownPositionals: List<Positional> = cli.positionals;
+    var mut ownGroups: List<ArgGroup> = cli.groups;
+    var mut inheritedOptions: List<ArgOption> = [];
+    var mut inheritedFlags: List<Flag> = [];
+    var mut depth: int = 0;
+    while depth < path.length() {
+        for option in ownOptions {
+            if option.global {
+                inheritedOptions.append(value: option);
+            }
+        }
+        for flag in ownFlags {
+            if flag.global {
+                inheritedFlags.append(value: flag);
+            }
+        }
+        var found: Option<SubCommand> = findCommand(
+            cli: cli,
+            path: prefixOf(items: path, count: depth + 1),
+        );
+        if found.isNone() {
+            break;
+        }
+        var sub: SubCommand = found.unwrap();
+        ownOptions = sub.options;
+        ownFlags = sub.flags;
+        ownPositionals = sub.positionals;
+        ownGroups = sub.groups;
+        depth = depth + 1;
+    }
+    var mut options: List<ArgOption> = [];
+    var mut flags: List<Flag> = [];
+    for option in ownOptions {
+        options.append(value: option);
+    }
+    for option in inheritedOptions {
+        options.append(value: option);
+    }
+    for flag in ownFlags {
+        flags.append(value: flag);
+    }
+    for flag in inheritedFlags {
+        flags.append(value: flag);
+    }
+    return Scope(
+        path: path,
+        options: options,
+        flags: flags,
+        positionals: ownPositionals,
+        groups: ownGroups,
+        children: childrenOf(cli: cli, path: path),
+    );
+};
+
+fn hasLongName(
+    long: str,
+    aliases: List<str>,
+    name: str,
+    caseSensitive: bool,
+) -> bool {
+    if long != ""
+        && sameText(left: long, right: name, caseSensitive: caseSensitive) {
+        return true;
+    }
+    return listContains(
+        items: aliases,
+        wanted: name,
+        caseSensitive: caseSensitive,
+    );
+};
+
+fn findLongOption(
+    scope: Scope,
+    name: str,
+    caseSensitive: bool,
+) -> Option<ArgOption> {
+    for option in scope.options {
+        if hasLongName(
+            long: option.long,
+            aliases: option.aliases,
+            name: name,
+            caseSensitive: caseSensitive,
+        ) {
+            return some(value: option);
+        }
+    }
+    return none();
+};
+
+fn findLongFlag(
+    scope: Scope,
+    name: str,
+    caseSensitive: bool,
+) -> Option<Flag> {
+    for flag in scope.flags {
+        if hasLongName(
+            long: flag.long,
+            aliases: flag.aliases,
+            name: name,
+            caseSensitive: caseSensitive,
+        ) {
+            return some(value: flag);
+        }
+    }
+    return none();
+};
+
+fn findShortOption(scope: Scope, letter: str) -> Option<ArgOption> {
+    for option in scope.options {
+        if option.short != "" && option.short == letter {
+            return some(value: option);
+        }
+    }
+    return none();
+};
+
+fn findShortFlag(scope: Scope, letter: str) -> Option<Flag> {
+    for flag in scope.flags {
+        if flag.short != "" && flag.short == letter {
+            return some(value: flag);
+        }
+    }
+    return none();
+};
+
+// Every spelling a user could mistype, for "did you mean" suggestions.
+fn longSpellings(scope: Scope) -> List<str> {
+    var mut out: List<str> = [];
+    for option in scope.options {
+        if option.long != "" && !option.hidden {
+            out.append(value: option.long);
+        }
+    }
+    for flag in scope.flags {
+        if flag.long != "" && !flag.hidden {
+            out.append(value: flag.long);
+        }
+    }
+    return out;
+};
+
+fn commandSpellings(scope: Scope) -> List<str> {
+    var mut out: List<str> = [];
+    for sub in scope.children {
+        if !sub.hidden {
+            out.append(value: sub.name);
+        }
+    }
+    return out;
+};
