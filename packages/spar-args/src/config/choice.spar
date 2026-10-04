@@ -1,8 +1,0 @@
-// One accepted value of an option or positional. `value` is the canonical
-// spelling stored in the matches; aliases are alternative spellings.
-export struct Choice {
-    value: str;
-    aliases: List<str> = [];
-    help: str = "";
-    hidden: bool = false;
-};

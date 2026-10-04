@@ -1,9 +1,0 @@
-export struct CliSettings {
-    autoHelp: bool = true;
-    autoVersion: bool = true;
-    allowUnknownArguments: bool = false;
-    allowCombinedShortFlags: bool = true;
-    allowLongEquals: bool = true;
-    caseSensitive: bool = true;
-    stopAtDoubleDash: bool = true;
-};

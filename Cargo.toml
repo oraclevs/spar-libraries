@@ -8,7 +8,7 @@ publish = false
 crate-type = ["cdylib"]
 
 [dependencies]
-spar-native = { path = "../../sdk/spar-native" }
+spar-native = { path = "sdk/spar-native" }
 rustls = { version = "0.23.44", default-features = false, features = ["ring", "std", "tls12"] }
 rustls-pemfile = "2.2.0"
 socket2 = { version = "0.5.10", features = ["all"] }

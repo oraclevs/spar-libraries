@@ -1,6 +1,0 @@
-struct Package {
-    name: str = "spar-args";
-    version: str = "0.1.0";
-    kind: str = "library";
-    entry: str = "src/lib.spar";
-};

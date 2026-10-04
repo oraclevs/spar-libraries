@@ -1,9 +1,0 @@
-// Everything the runner and reporters need to know about how to run.
-export struct RunOptions {
-    filter: str = "";
-    verbose: bool = false;
-    quiet: bool = false;
-    failFast: bool = false;
-    list: bool = false;
-    color: bool = false;
-};
