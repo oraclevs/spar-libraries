@@ -1,6 +1,6 @@
 # TCP package
 
-This package provides TCP listeners and clients through Spar native ABI 1. The transport is implemented in Rust and exposed through `src/lib.spar`. Build the artifact for your host with `bash build-package.sh` (or `./build-package.ps1` on Windows MSVC), then add the package with `spar add tcp path:/absolute/path/to/spar-tcp`.
+This package provides TCP listeners and clients through Spar native ABI 1. The transport is implemented in Rust and exposed through `src/lib.spar`. This repository contains source only. Build the artifact for your host with `bash build-package.sh` (or `./build-package.ps1` on Windows MSVC), then add the package with `spar add tcp path:/absolute/path/to/spar-tcp`. The Spar beta source installer builds it during installation.
 
 ```spar
 import pkg { listen, accept, read, writeText, close, closeListener } from "tcp";
@@ -22,7 +22,7 @@ The client API has `connect(address:, timeoutMillis:)` and `connectTls(address:,
 
 The package manifest uses camel-case native target keys and names `native/interface.json`. That static file lists opaque types and native function signatures. `spar-ls` reads it without loading the binary; Spar verifies it against the binary when running the package. Keep it in sync when changing the Rust API.
 
-Run `bash build-package.sh && cargo test --offline --test e2e` to test configured clients and listeners, byte-stream reads, and half-close. Set `SPAR_BIN` to choose the Spar executable. The Rust build currently uses the local `spar-native` SDK at `../../../Rust/occ_lang/spar-native`; change that dependency before publishing elsewhere. Native artifacts for macOS and Windows still need builds and host tests.
+Run `bash build-package.sh && cargo test --offline --test e2e` to test configured clients and listeners, byte-stream reads, and half-close. Set `SPAR_BIN` to choose the Spar executable. The Rust build uses the `spar-native` SDK included with this repository. The TLS integration test generates a localhost certificate with OpenSSL. Native artifacts for macOS and Windows still need host builds and tests.
 
 The [implementation status](TCP_STATUS.md) tracks remaining work against `tcp_req.md`.
 
